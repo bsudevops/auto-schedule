@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { deletePost, reschedulePost, savePost } from "@/lib/posts";
+import { deletePost, reschedulePost, retryFailed, savePost } from "@/lib/posts";
 import { zonedToUtc } from "@/lib/queue-slots";
 import { requireWorkspace } from "@/lib/session";
 
@@ -26,6 +26,13 @@ export async function reschedulePostAction(workspaceId: string, postId: string, 
 export async function deletePostAction(workspaceId: string, postId: string) {
   const { member, workspace } = await requireWorkspace(workspaceId);
   const r = await deletePost({ member, workspace }, postId);
+  if (r.ok) revalidatePath(`/w/${workspaceId}`, "layout");
+  return r;
+}
+
+export async function retryFailedAction(workspaceId: string, postId: string) {
+  const { member, workspace } = await requireWorkspace(workspaceId);
+  const r = await retryFailed({ member, workspace }, postId);
   if (r.ok) revalidatePath(`/w/${workspaceId}`, "layout");
   return r;
 }

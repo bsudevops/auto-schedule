@@ -6,6 +6,7 @@ The product name **YourBrand** is a placeholder. Change it in `src/lib/brand.ts`
 
 - What the product does: [docs/FEATURE-SPEC.md](docs/FEATURE-SPEC.md)
 - How the code is organised: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Connecting Instagram, Facebook, LinkedIn and TikTok: [docs/PLATFORM-SETUP.md](docs/PLATFORM-SETUP.md)
 
 ## Run it locally
 
@@ -18,10 +19,13 @@ npm install
 npm run db:migrate
 npm run db:seed               # optional demo data: demo@example.com / demo-password-123
 npm run dev                   # http://localhost:3000
-npm run worker                # background jobs, in a second terminal
+npm run worker                # publishing and other background jobs, in a second terminal
+npm run media                 # serves uploaded files on :3001 in development
 ```
 
 Without `SMTP_HOST`, emails (sign-up confirmation, invitations, password resets) are printed in the terminal running `npm run dev`.
+
+To try publishing before the platform apps exist, set `PUBLISH_DRY_RUN=true` in `.env`.
 
 ## Checks
 

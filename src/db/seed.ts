@@ -63,6 +63,7 @@ for (const p of P) {
     return {
       postId: row!.id, channelId: c!.id,
       status: failed ? ("failed" as const) : p.status === "published" || p.status === "partially_failed" ? ("published" as const) : ("pending" as const),
+      publishedAt: !failed && (p.status === "published" || p.status === "partially_failed") ? p.scheduledAt : null,
       error: failed ? "TikTok rejected the request because the access token expired. Reconnect TikTok, then retry." : null,
     };
   }));

@@ -20,6 +20,7 @@ const csp = [
 
 const config: NextConfig = {
   poweredByHeader: false,
+  serverExternalPackages: ["bullmq", "ioredis"],
   async headers() {
     return [
       {
