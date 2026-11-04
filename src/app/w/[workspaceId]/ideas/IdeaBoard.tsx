@@ -38,6 +38,11 @@ export function IdeaBoard({ workspaceId, ideas, canCreate, canEditAll }: { works
                 <span className="col-step">{stage + 1}</span>
                 <h2>{label}</h2>
                 <span className="n">{list.length}</span>
+                {canCreate && (
+                  <button type="button" className="col-add" aria-label={`Add an idea to ${label}`} aria-expanded={adding === key} onClick={() => setAdding(adding === key ? null : key)}>
+                    <Icon name="plus" size={15} /><span>Add</span>
+                  </button>
+                )}
               </header>
 
               <div className="col-body">
@@ -77,13 +82,10 @@ export function IdeaBoard({ workspaceId, ideas, canCreate, canEditAll }: { works
                 ))}
 
                 {list.length === 0 && adding !== key && (
-                  <p className="col-empty">{canCreate ? "Nothing here yet. Add an idea or drag one in." : "Nothing here yet."}</p>
+                  <p className="col-empty">{canCreate ? "Nothing here yet. Use Add above or drag an idea in." : "Nothing here yet."}</p>
                 )}
               </div>
 
-              {canCreate && adding !== key && (
-                <button type="button" className="col-add-row" onClick={() => setAdding(key)}><Icon name="plus" size={15} /> Add idea</button>
-              )}
             </section>
           );
         })}
