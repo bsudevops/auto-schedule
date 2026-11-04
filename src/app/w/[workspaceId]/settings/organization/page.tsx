@@ -4,6 +4,9 @@ import { orgMembers } from "@/db/schema";
 import { listUserWorkspaces, requireWorkspace } from "@/lib/session";
 import { NewWorkspaceForm } from "./NewWorkspaceForm";
 import Link from "next/link";
+import { DELETION_GRACE_DAYS } from "@/lib/org-deletion";
+import { DeleteOrg } from "./DeleteOrg";
+import { organizations } from "@/db/schema";
 
 export const metadata = { title: "Organization" };
 
@@ -12,6 +15,7 @@ export default async function Page({ params }: { params: Promise<{ workspaceId: 
   const { user, workspace, orgName } = await requireWorkspace(workspaceId);
   const [om] = await db.select().from(orgMembers).where(and(eq(orgMembers.orgId, workspace.orgId), eq(orgMembers.userId, user.id)));
   const all = (await listUserWorkspaces(user.id)).filter((w) => w.orgName === orgName);
+  const [org] = await db.select({ deletionRequestedAt: organizations.deletionRequestedAt }).from(organizations).where(eq(organizations.id, workspace.orgId));
   return (
     <div className="stack" style={{ gap: 16 }}>
       <section className="card">
@@ -30,6 +34,7 @@ export default async function Page({ params }: { params: Promise<{ workspaceId: 
       ) : (
         <p className="muted">Ask an organization owner or admin to add workspaces.</p>
       )}
+      {om?.role === "owner" && !org?.deletionRequestedAt && <DeleteOrg workspaceId={workspaceId} orgName={orgName} days={DELETION_GRACE_DAYS} />}
     </div>
   );
 }

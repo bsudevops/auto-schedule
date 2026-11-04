@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { fileTypeFromBuffer } from "file-type";
-import sharp from "sharp";
+import sharp, { type Metadata, type Sharp } from "sharp";
 
 /** File types we accept, detected from the file's bytes. The name and the browser's claimed type are ignored. */
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/avif"]);
@@ -40,8 +40,8 @@ export async function processUpload(input: Buffer): Promise<ProcessedFile> {
 
   if (IMAGE_TYPES.has(detected.mime)) {
     if (input.length > MAX_IMAGE_BYTES) throw new UploadError("Images can be up to 20 MB.");
-    let img: sharp.Sharp;
-    let meta: sharp.Metadata;
+    let img: Sharp;
+    let meta: Metadata;
     try {
       img = sharp(input, { failOn: "error", limitInputPixels: 80_000_000 }).rotate();
       meta = await img.metadata();

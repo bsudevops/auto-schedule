@@ -8,7 +8,7 @@ export default function Page() {
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const email = String(new FormData(e.currentTarget).get("email"));
-    await authClient.forgetPassword({ email, redirectTo: "/reset-password" });
+    await authClient.requestPasswordReset({ email, redirectTo: "/reset-password" });
     // Same message whether or not the account exists, so this page can't be used to check emails.
     setSent(true);
   }

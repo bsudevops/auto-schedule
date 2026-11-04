@@ -41,7 +41,7 @@ export const auth = betterAuth({
     enabled: true,
     window: 60,
     max: 100,
-    customRules: { "/sign-in/email": { window: 60, max: 10 }, "/sign-up/email": { window: 60, max: 5 }, "/forget-password": { window: 60, max: 5 } },
+    customRules: { "/sign-in/email": { window: 60, max: 10 }, "/sign-up/email": { window: 60, max: 5 }, "/request-password-reset": { window: 60, max: 5 } },
   },
   advanced: {
     // Only read the client IP from X-Real-IP, which the hosting proxy overwrites (Vercel does; configure Caddy or nginx to).
