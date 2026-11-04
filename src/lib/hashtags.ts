@@ -1,4 +1,4 @@
-/** "#Coffee, latte  #coffee" becomes ["#Coffee", "#latte"]: one # each, no duplicates, up to 30. */
+/** "#Launch, news  #launch" becomes ["#Launch", "#news"]: one # each, no duplicates, up to 30. */
 export function cleanTags(raw: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];

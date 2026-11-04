@@ -107,7 +107,7 @@ export function HashtagMenu({ workspaceId, sets: initial, caption, onInsert, onH
           });
         }}>
           <label className="field"><span>Save this caption&apos;s {found.length || ""} hashtag{found.length === 1 ? "" : "s"} as a set</span>
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Set name, like Coffee" maxLength={40} disabled={!found.length} /></label>
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Set name, like Product launch" maxLength={40} disabled={!found.length} /></label>
           <button className="btn sm" disabled={pending || !found.length || !name.trim()}>Save set</button>
           {msg?.error && <p className="err" role="alert" style={{ margin: 0 }}>{msg.error}</p>}
           {msg?.ok && <p className="muted" role="status" style={{ margin: 0, fontSize: 12.5 }}>{msg.ok}</p>}
@@ -152,7 +152,7 @@ export function StockSearch({ workspaceId, onAdded }: { workspaceId: string; onA
   return (
     <div className="stack" style={{ gap: 12 }}>
       <form className="row" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); search(1); }}>
-        <input className="input" aria-label="Search stock photos" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search free photos, like coffee shop" maxLength={100} />
+        <input className="input" aria-label="Search stock photos" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search free photos, like team meeting" maxLength={100} />
         <button className="btn" disabled={pending || !q.trim()}><Icon name="search" /> Search</button>
       </form>
       {error && <p className="err" role="alert">{error}</p>}

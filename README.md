@@ -19,11 +19,14 @@ cp .env.example .env          # then fill in the secrets it lists
 docker compose up -d          # Postgres and Redis on 127.0.0.1 only
 npm install
 npm run db:migrate
-npm run db:seed               # optional demo data: demo@example.com / demo-password-123
 npm run dev                   # http://localhost:3000
 npm run worker                # publishing and other background jobs, in a second terminal
 npm run media                 # serves uploaded files on :3001 in development
 ```
+
+A new install starts empty: open the app, create your account on the sign-up page, and the setup screen walks you through your company and first workspace. The first person to sign up owns it.
+
+For development and the end-to-end tests only, `npm run db:seed` fills a local database with a sample workspace (sign in as demo@example.com / demo-password-123). It refuses to run in production.
 
 Without `SMTP_HOST`, emails (sign-up confirmation, invitations, password resets) are printed in the terminal running `npm run dev`.
 
