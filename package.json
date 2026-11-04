@@ -1,0 +1,53 @@
+{
+  "name": "auto-schedule",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "worker": "node --env-file-if-exists=.env --import tsx src/worker/index.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "node --env-file-if-exists=.env ./node_modules/drizzle-kit/bin.cjs generate",
+    "db:migrate": "node --env-file-if-exists=.env --import tsx src/db/migrate.ts",
+    "db:seed": "node --env-file-if-exists=.env --import tsx src/db/seed.ts"
+  },
+  "dependencies": {
+    "@fontsource-variable/figtree": "5.2.10",
+    "@fontsource-variable/outfit": "5.2.8",
+    "@fontsource/jetbrains-mono": "5.2.8",
+    "better-auth": "1.3.34",
+    "bullmq": "5.81.5",
+    "clsx": "2.1.1",
+    "drizzle-orm": "0.44.7",
+    "ioredis": "5.11.1",
+    "next": "15.5.29",
+    "nodemailer": "7.0.13",
+    "postgres": "3.4.9",
+    "react": "19.1.10",
+    "react-dom": "19.1.10",
+    "server-only": "0.0.1",
+    "zod": "4.1.13"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "3.3.1",
+    "@tailwindcss/postcss": "4.1.18",
+    "@types/node": "22.20.5",
+    "@types/nodemailer": "7.0.12",
+    "@types/react": "19.1.17",
+    "@types/react-dom": "19.1.11",
+    "drizzle-kit": "0.31.11",
+    "eslint": "9.39.5",
+    "eslint-config-next": "15.5.29",
+    "tailwindcss": "4.1.18",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}
