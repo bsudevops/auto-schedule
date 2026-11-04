@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
+import { signupCheckAction } from "@/app/actions/auth";
 import { authClient } from "@/lib/auth-client";
 import { GoogleButton } from "../GoogleButton";
 
@@ -16,6 +17,12 @@ export function SignUpForm({ google, invite }: { google: boolean; invite?: strin
     const email = String(f.get("email"));
     setBusy(true);
     setError(null);
+    const allowed = await signupCheckAction(email);
+    if (!allowed.ok) {
+      setBusy(false);
+      setError(allowed.error);
+      return;
+    }
     const { error } = await authClient.signUp.email({ name: String(f.get("name")), email, password: String(f.get("password")), callbackURL: next });
     setBusy(false);
     if (error) {

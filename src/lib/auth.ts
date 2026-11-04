@@ -1,11 +1,14 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
+import { APIError } from "better-auth/api";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { account, session, user, verification } from "@/db/schema";
 import { BRAND } from "./brand";
 import { sendEmail } from "./email";
+import { signupAllowed } from "./signup-gate";
+import { SIGNUP_CLOSED_MESSAGE } from "./signup-policy";
 
 const google =
   process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
@@ -49,6 +52,16 @@ export const auth = betterAuth({
     ipAddress: { ipAddressHeaders: ["x-real-ip"] },
   },
   databaseHooks: {
+    user: {
+      create: {
+        // In invite-only mode a new account needs a pending invitation for its email, unless it's an admin address.
+        // This covers email sign-up and Google sign-in alike.
+        before: async (u) => {
+          if (!(await signupAllowed(u.email))) throw new APIError("FORBIDDEN", { message: SIGNUP_CLOSED_MESSAGE });
+          return { data: u };
+        },
+      },
+    },
     session: {
       create: {
         before: async (s) => {

@@ -16,6 +16,7 @@
     "test": "vitest run",
     "db:generate": "node --env-file-if-exists=.env ./node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "node --env-file-if-exists=.env --import tsx src/db/migrate.ts",
+    "admin:create": "node --env-file-if-exists=.env --import tsx scripts/create-admin.ts",
     "db:seed": "node --env-file-if-exists=.env --import tsx src/db/seed.ts",
     "media": "node --env-file-if-exists=.env --import tsx scripts/media-server.ts",
     "e2e": "playwright test"
