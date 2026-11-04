@@ -7,7 +7,7 @@ import { PublishError, type ProviderAdapter, type PublishInput, type PublishResu
  * Until TikTok audits the app, posts can only be published as private (SELF_ONLY).
  */
 const API = "https://open.tiktokapis.com/v2";
-const SCOPES = "user.info.basic,user.info.profile,user.info.stats,video.publish";
+const SCOPES = "user.info.basic,user.info.profile,user.info.stats,video.publish,video.list";
 
 type TikTokBody = { data?: Record<string, unknown>; error?: { code?: string; message?: string } };
 

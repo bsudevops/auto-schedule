@@ -5,6 +5,7 @@
 import { DelayedError, Queue, UnrecoverableError, Worker } from "bullmq";
 import { MAINTENANCE_QUEUE, PUBLISH_ATTEMPTS, PUBLISH_QUEUE, enqueueTarget, publishQueue, type PublishJob } from "@/lib/jobs";
 import { claimDuePosts, dryRun, publishTarget, purgeOldRecords, resetStuckTarget, targetsToQueue } from "@/lib/publishing/run";
+import { syncAll } from "@/lib/publishing/sync";
 import { refreshExpiringTokens } from "@/lib/publishing/tokens";
 import { redis } from "@/lib/redis";
 
@@ -46,6 +47,8 @@ const maintenance = new Worker(
     if (job.name === "tick") return tick();
     if (job.name === "refresh-tokens") return refreshExpiringTokens();
     if (job.name === "purge") return purgeOldRecords();
+    if (job.name === "sync-inbox") return syncAll("inbox");
+    if (job.name === "sync-insights") return syncAll("insights");
     throw new UnrecoverableError(`Unknown maintenance job ${job.name}`);
   },
   { connection, concurrency: 1 },
@@ -55,6 +58,8 @@ async function start() {
   // Job schedulers run once across all workers, however many are running.
   await maintenanceQueue.upsertJobScheduler("tick", { every: Number(process.env.SCHEDULER_INTERVAL_MS ?? 15_000) }, { name: "tick", opts: { removeOnComplete: true, removeOnFail: 50 } });
   await maintenanceQueue.upsertJobScheduler("refresh-tokens", { every: 3_600_000 }, { name: "refresh-tokens", opts: { removeOnComplete: true, removeOnFail: 50 } });
+  await maintenanceQueue.upsertJobScheduler("sync-inbox", { every: 10 * 60_000 }, { name: "sync-inbox", opts: { removeOnComplete: true, removeOnFail: 50 } });
+  await maintenanceQueue.upsertJobScheduler("sync-insights", { every: 6 * 3_600_000 }, { name: "sync-insights", opts: { removeOnComplete: true, removeOnFail: 50 } });
   await maintenanceQueue.upsertJobScheduler("purge", { pattern: "17 3 * * *" }, { name: "purge", opts: { removeOnComplete: true, removeOnFail: 50 } });
   console.log(`Worker ready${dryRun() ? " (DRY RUN: nothing is sent to platforms)" : ""}`);
 }

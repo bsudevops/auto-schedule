@@ -3,7 +3,7 @@ import { useActionState } from "react";
 import { updateWorkspace } from "@/app/actions/workspace";
 import { WorkspaceFields } from "@/components/WorkspaceFields";
 
-type Ws = { id: string; name: string; timezone: string; color: string; defaultHashtags: string; defaultFirstComment: string };
+type Ws = { id: string; name: string; timezone: string; color: string; defaultHashtags: string; defaultFirstComment: string; savedReplies: string[] };
 
 export function WorkspaceForm({ workspace, canEdit }: { workspace: Ws; canEdit: boolean }) {
   const [state, action, pending] = useActionState(updateWorkspace.bind(null, workspace.id), undefined);
@@ -19,6 +19,12 @@ export function WorkspaceForm({ workspace, canEdit }: { workspace: Ws; canEdit: 
         <div className="stack" style={{ maxWidth: 520 }}>
           <label className="field"><span>Default hashtags</span><input className="input" name="defaultHashtags" id="defaultHashtags" defaultValue={workspace.defaultHashtags} maxLength={500} disabled={!canEdit} placeholder="#YourBrand #Coffee" /></label>
           <label className="field"><span>Default first comment</span><input className="input" name="defaultFirstComment" id="defaultFirstComment" defaultValue={workspace.defaultFirstComment} maxLength={2000} disabled={!canEdit} /></label>
+        </div>
+      </div>
+      <div className="set-row">
+        <div><h3>Saved replies</h3><p>Shown as one-click replies in the inbox. One per line.</p></div>
+        <div className="stack" style={{ maxWidth: 520 }}>
+          <label className="field"><span>Saved replies</span><textarea className="input" name="savedReplies" id="savedReplies" rows={4} defaultValue={workspace.savedReplies.join("\n")} disabled={!canEdit} placeholder={"Thanks so much!\nSorry about that. Can you send us a message with the details?"} /></label>
         </div>
       </div>
       {canEdit && (

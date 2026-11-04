@@ -8,7 +8,7 @@ import { PublishError, type ConnectedAccount, type ProviderAdapter, type Publish
 const apiVersion = () => env("LINKEDIN_API_VERSION") || "202410";
 const scopes = () => env("LINKEDIN_SCOPES") || "openid profile w_member_social";
 
-function headers(token: string, json = true): Record<string, string> {
+export function headers(token: string, json = true): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,
     "LinkedIn-Version": apiVersion(),
