@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const isDev = process.env.NODE_ENV !== "production";
-const mediaOrigin = process.env.MEDIA_PUBLIC_URL ? new URL(process.env.MEDIA_PUBLIC_URL).origin : "";
+const mediaOrigin = new URL(process.env.MEDIA_PUBLIC_URL || "http://localhost:3001").origin;
 
 // Strict CSP. Uploaded media is served from a separate storage origin, never from the app origin.
 const csp = [

@@ -5,7 +5,7 @@
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "./index";
-import { channels, inboxMessages, inboxThreads, organizations, orgMembers, posts, postTargets, user, workspaceMembers, workspaces } from "./schema";
+import { channels, ideas, inboxMessages, queueChannels, queueSlots, queues, inboxThreads, organizations, orgMembers, posts, postTargets, user, workspaceMembers, workspaces } from "./schema";
 
 if (process.env.NODE_ENV === "production") throw new Error("Refusing to seed a production database.");
 
@@ -77,6 +77,18 @@ await db.insert(inboxMessages).values(threads.map((t, i) => ({
   threadId: t.id, fromUs: false,
   body: ["Is the Huila available in bags to take home?", "Do you cater office events of around 40 people?", "Waited 20 minutes on Saturday morning."][i]!,
 })));
+
+const [q] = await db.insert(queues).values({ workspaceId: harbor!.id, name: "Weekday mornings" }).returning();
+await db.insert(queueSlots).values([1, 2, 3, 4, 5].map((weekday) => ({ queueId: q!.id, weekday, minuteOfDay: 8 * 60 })));
+await db.insert(queueChannels).values([{ queueId: q!.id, channelId: ig!.id }, { queueId: q!.id, channelId: fb!.id }]);
+
+await db.insert(ideas).values([
+  { workspaceId: harbor!.id, title: "Coffee tasting live stream with the roaster", column: "idea", tags: ["Video"], createdBy: demo!.id, position: 1 },
+  { workspaceId: harbor!.id, title: "Map of every shop and its signature drink", column: "idea", tags: ["Carousel"], createdBy: demo!.id, position: 2 },
+  { workspaceId: harbor!.id, title: "Cup sleeve art contest with local artists", column: "research", tags: ["Community"], createdBy: demo!.id, position: 3 },
+  { workspaceId: harbor!.id, title: "Winter Blend tasting notes carousel", column: "writing", tags: ["Seasonal"], createdBy: demo!.id, position: 4 },
+  { workspaceId: harbor!.id, title: "Holiday gift guide with partner bakeries", column: "ready", tags: ["Promo"], createdBy: demo!.id, position: 5 },
+]);
 
 console.log(`Seeded. Sign in as ${EMAIL} / ${PASSWORD}`);
 process.exit(0);
