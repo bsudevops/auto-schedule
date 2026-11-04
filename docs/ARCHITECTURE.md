@@ -36,6 +36,7 @@ src/
     api-auth.ts        REST API keys: hashed, scoped, rate limited, acting with the creator's current role
     org-deletion.ts    14-day grace period, then the organisation and its data are purged
   app/api/v1/          public REST API (see docs/API.md)
+  app/api/mcp/         MCP server for AI assistants, same keys as the REST API (see docs/MCP.md)
   worker/              background worker: publishing, inbox and insights sync, token refresh, webhooks and cleanup
 e2e/                   Playwright browser tests against the demo data
 ```
