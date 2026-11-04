@@ -6,6 +6,7 @@ import { channels, mediaAssets, postMedia, postTargets, posts, queueSlots, queue
 import { can, canEditPost, type Member } from "./permissions";
 import { checkPost } from "./post-rules";
 import { nextOpenSlot, zonedToUtc } from "./queue-slots";
+import { enqueueTarget } from "./jobs";
 
 export const postInput = z.object({
   postId: z.string().uuid().optional(),
@@ -116,4 +117,26 @@ export async function deletePost(ctx: Ctx, postId: string): Promise<{ ok: boolea
   if (!canEditPost(ctx.member, p) && !(p.status === "published" && can(ctx.member, "edit_others_posts"))) return { ok: false, error: "You can't delete this post." };
   await db.delete(posts).where(eq(posts.id, p.id));
   return { ok: true };
+}
+
+/** Sends a post's failed channels back to the publishing queue. */
+export async function retryFailed(ctx: Ctx, postId: string): Promise<{ ok: boolean; error?: string; count?: number }> {
+  if (!can(ctx.member, "publish")) return { ok: false, error: "Your role can't publish posts." };
+  const [p] = await db.select().from(posts).where(and(eq(posts.id, postId), eq(posts.workspaceId, ctx.workspace.id)));
+  if (!p) return { ok: false, error: "That post no longer exists." };
+  if (p.status !== "failed" && p.status !== "partially_failed") return { ok: false, error: "Only failed posts can be retried." };
+  const ids = await db.transaction(async (tx) => {
+    const [claimed] = await tx.update(posts).set({ status: "publishing" }).where(and(eq(posts.id, p.id), inArray(posts.status, ["failed", "partially_failed"]))).returning({ id: posts.id });
+    if (!claimed) return [];
+    const rows = await tx
+      .update(postTargets)
+      .set({ status: "pending", error: null, attempts: 0 })
+      .where(and(eq(postTargets.postId, p.id), eq(postTargets.status, "failed")))
+      .returning({ id: postTargets.id });
+    return rows.map((r) => r.id);
+  });
+  if (!ids.length) return { ok: false, error: "Nothing to retry." };
+  // The worker also picks up pending targets on its next pass, so a Redis hiccup here only delays the retry.
+  await Promise.all(ids.map((id) => enqueueTarget(id).catch(() => undefined)));
+  return { ok: true, count: ids.length };
 }

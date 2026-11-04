@@ -199,12 +199,33 @@ export const channels = pgTable(
     status: channelStatus("status").notNull().default("connected"),
     lastError: text("last_error"),
     followers: integer("followers"),
+    // Platform-specific details needed to publish, such as the LinkedIn author URN or the Facebook Page behind an Instagram account.
+    meta: jsonb("meta").$type<Record<string, unknown>>().notNull().default({}),
+    lastPublishedAt: timestamp("last_published_at", { withTimezone: true }),
     connectedBy: text("connected_by").references(() => user.id, { onDelete: "set null" }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex("channels_ws_platform_ext_uq").on(t.workspaceId, t.platform, t.externalId)],
 );
+
+/**
+ * Accounts returned by a platform after OAuth, waiting for the user to pick which ones to add.
+ * The payload (which includes tokens) is encrypted and the row expires after 15 minutes.
+ */
+export const pendingConnections = pgTable("pending_connections", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  payloadEnc: text("payload_enc").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: createdAt(),
+});
 
 /* ------------------------------------------------------------------ */
 /* Media                                                               */
@@ -362,6 +383,7 @@ export const postTargets = pgTable(
     error: text("error"),
     attempts: smallint("attempts").notNull().default(0),
     publishedAt: timestamp("published_at", { withTimezone: true }),
+    updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex("post_targets_post_channel_uq").on(t.postId, t.channelId)],
 );
