@@ -39,7 +39,7 @@ LinkedIn tokens last 60 days. The Channels page warns a week ahead, and owners a
 ## TikTok
 
 1. At developers.tiktok.com, create an app and add **Login Kit** and **Content Posting API** (enable *Direct Post*).
-2. Add the redirect URL above, and request the scopes `user.info.basic`, `user.info.profile`, `user.info.stats` and `video.publish`.
+2. Add the redirect URL above, and request the scopes `user.info.basic`, `user.info.profile`, `user.info.stats`, `video.publish` and `video.list`.
 3. Under *URL properties*, verify the domain of `MEDIA_PUBLIC_URL`. TikTok downloads each video from there.
 4. Set `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET`.
 
@@ -53,3 +53,19 @@ Until TikTok audits the app, videos can only be posted as private. The product t
 - Per-channel limits stay under each platform's own: Instagram 25 a day, Facebook 50 an hour, LinkedIn 50 a day, TikTok 15 a day. Posts over the limit wait for the next window.
 - Tokens that can be refreshed (TikTok, and LinkedIn when allowed) are refreshed hourly before they expire.
 - Every attempt is recorded in the publish log, which keeps 90 days.
+
+## Inbox and analytics
+
+- Every 10 minutes the worker reads comments on posts published in the last 14 days. Each top-level comment becomes a conversation; a new comment reopens it and marks it unread. Replies go back through the platform's API.
+- Every 6 hours it reads follower counts, daily figures and per-post figures for the last 30 days.
+- What each platform shares:
+
+| | Followers | Daily figures | Post figures | Comments and replies |
+|---|---|---|---|---|
+| Facebook Page | Yes | Impressions, reach, engagements, video views | Yes | Yes |
+| Instagram | Yes | Reach | Yes | Yes |
+| LinkedIn company page | Yes | Impressions, reach, engagements, clicks | Likes, comments | Yes |
+| LinkedIn profile | No | No | Likes, comments | Yes |
+| TikTok | Yes | No | Views, likes, comments, shares | Not offered by TikTok |
+
+Direct messages need extra Meta permissions and a webhook endpoint, and aren't included yet.

@@ -40,7 +40,7 @@ export function metaError(res: HttpResponse, action: string): PublishError {
   return new PublishError(`${action}: ${msg}`, "permanent", e);
 }
 
-async function call<T>(method: "GET" | "POST", path: string, token: string, params: Record<string, string>, action: string): Promise<T> {
+export async function call<T>(method: "GET" | "POST", path: string, token: string, params: Record<string, string>, action: string): Promise<T> {
   const all = { ...params, access_token: token, appsecret_proof: proof(token) };
   const res =
     method === "GET"

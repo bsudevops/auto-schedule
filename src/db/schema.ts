@@ -1,6 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -121,6 +122,11 @@ export const workspaces = pgTable(
     iconKey: text("icon_key"),
     defaultHashtags: text("default_hashtags").notNull().default(""),
     defaultFirstComment: text("default_first_comment").notNull().default(""),
+    // One-click replies shown in the inbox.
+    savedReplies: text("saved_replies")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -467,6 +473,10 @@ export const inboxThreads = pgTable(
     authorName: text("author_name").notNull(),
     sentiment: sentiment("sentiment").notNull().default("neutral"),
     assignedTo: text("assigned_to").references(() => user.id, { onDelete: "set null" }),
+    // The published post the conversation is on, when there is one.
+    postTargetId: uuid("post_target_id").references(() => postTargets.id, { onDelete: "set null" }),
+    // Platform IDs needed to reply, such as the LinkedIn post URN.
+    meta: jsonb("meta").$type<Record<string, unknown>>().notNull().default({}),
     unread: boolean("unread").notNull().default(true),
     doneAt: timestamp("done_at", { withTimezone: true }),
     lastMessageAt: timestamp("last_message_at", { withTimezone: true }).notNull().defaultNow(),
@@ -477,16 +487,60 @@ export const inboxThreads = pgTable(
   ],
 );
 
-export const inboxMessages = pgTable("inbox_messages", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  threadId: uuid("thread_id")
-    .notNull()
-    .references(() => inboxThreads.id, { onDelete: "cascade" }),
-  fromUs: boolean("from_us").notNull(),
-  sentBy: text("sent_by").references(() => user.id, { onDelete: "set null" }),
-  body: text("body").notNull(),
-  externalId: text("external_id"),
-  createdAt: createdAt(),
+export const inboxMessages = pgTable(
+  "inbox_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => inboxThreads.id, { onDelete: "cascade" }),
+    fromUs: boolean("from_us").notNull(),
+    sentBy: text("sent_by").references(() => user.id, { onDelete: "set null" }),
+    authorName: text("author_name"),
+    body: text("body").notNull(),
+    externalId: text("external_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("inbox_messages_thread_ext_uq").on(t.threadId, t.externalId), index("inbox_messages_thread_idx").on(t.threadId, t.createdAt)],
+);
+
+/* ------------------------------------------------------------------ */
+/* Analytics                                                           */
+/* ------------------------------------------------------------------ */
+
+/** One row per channel per day, in the workspace's time zone. Figures a platform doesn't offer stay null. */
+export const channelMetricsDaily = pgTable(
+  "channel_metrics_daily",
+  {
+    channelId: uuid("channel_id")
+      .notNull()
+      .references(() => channels.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    followers: integer("followers"),
+    impressions: integer("impressions"),
+    reach: integer("reach"),
+    engagements: integer("engagements"),
+    videoViews: integer("video_views"),
+    linkClicks: integer("link_clicks"),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.channelId, t.day] })],
+);
+
+/** Latest totals for one published post on one channel. */
+export const postMetrics = pgTable("post_metrics", {
+  targetId: uuid("target_id")
+    .primaryKey()
+    .references(() => postTargets.id, { onDelete: "cascade" }),
+  impressions: integer("impressions"),
+  reach: integer("reach"),
+  likes: integer("likes"),
+  comments: integer("comments"),
+  shares: integer("shares"),
+  saves: integer("saves"),
+  videoViews: integer("video_views"),
+  clicks: integer("clicks"),
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 /* ------------------------------------------------------------------ */

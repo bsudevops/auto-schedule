@@ -2,10 +2,10 @@
  * Demo data for local development and design review. Never run against production.
  * Creates demo@example.com / demo-password-123 with two workspaces of sample content.
  */
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "./index";
-import { channels, ideas, inboxMessages, queueChannels, queueSlots, queues, inboxThreads, organizations, orgMembers, posts, postTargets, user, workspaceMembers, workspaces } from "./schema";
+import { channelMetricsDaily, channels, ideas, inboxMessages, postMetrics, queueChannels, queueSlots, queues, inboxThreads, organizations, orgMembers, posts, postTargets, user, workspaceMembers, workspaces } from "./schema";
 
 if (process.env.NODE_ENV === "production") throw new Error("Refusing to seed a production database.");
 
@@ -69,15 +69,71 @@ for (const p of P) {
   }));
 }
 
-const threads = await db.insert(inboxThreads).values([
-  { workspaceId: harbor!.id, channelId: ig!.id, kind: "comment", externalId: "c1", subject: "Origin story: Huila roast", authorName: "jess.makes.things", sentiment: "positive" },
-  { workspaceId: harbor!.id, channelId: fb!.id, kind: "message", externalId: "m1", subject: "Direct message", authorName: "Amira Yusuf", sentiment: "neutral" },
-  { workspaceId: harbor!.id, channelId: li!.id, kind: "comment", externalId: "c2", subject: "Gift cards", authorName: "Tom Becker", sentiment: "negative" },
-]).returning();
-await db.insert(inboxMessages).values(threads.map((t, i) => ({
-  threadId: t.id, fromUs: false,
-  body: ["Is the Huila available in bags to take home?", "Do you cater office events of around 40 people?", "Waited 20 minutes on Saturday morning."][i]!,
-})));
+// A teammate, so conversations can be assigned.
+await auth.api.signUpEmail({ body: { name: "Marcus Lee", email: "marcus@example.com", password: PASSWORD } });
+const [marcus] = await db.update(user).set({ emailVerified: true }).where(eq(user.email, "marcus@example.com")).returning();
+await db.insert(workspaceMembers).values({ workspaceId: harbor!.id, userId: marcus!.id, role: "editor" });
+await db.update(workspaces).set({ savedReplies: ["Thanks so much! ☕", "Sorry about that. Can you send us a message with the details?", "Yes, in 250g and 1kg bags at every shop."] }).where(eq(workspaces.id, harbor!.id));
+
+const ago = (mins: number) => new Date(Date.now() - mins * 60_000);
+const convo: { channel: typeof ig; kind: "comment" | "message" | "mention"; author: string; subject: string; sentiment: "positive" | "neutral" | "negative"; unread: boolean; assigned?: string; msgs: [boolean, string, number][] }[] = [
+  { channel: ig, kind: "comment", author: "jess.makes.things", subject: "From Huila to your cup", sentiment: "positive", unread: true, msgs: [[false, "Is the Huila available in bags to take home? Loved it this morning ❤️", 18]] },
+  { channel: fb, kind: "message", author: "Amira Yusuf", subject: "Direct message", sentiment: "neutral", unread: true, assigned: marcus!.id, msgs: [[false, "Do you cater office events of around 40 people?", 95]] },
+  { channel: li, kind: "comment", author: "Tom Becker", subject: "Holiday gift cards are here", sentiment: "negative", unread: true, msgs: [[false, "Waited 20 minutes on Saturday morning and the latte was cold. Disappointed.", 240]] },
+  { channel: ig, kind: "comment", author: "brewlab.sam", subject: "From Huila to your cup", sentiment: "positive", unread: false, msgs: [[false, "Best washed Caturra I've had this year 🔥", 1500], [true, "Thank you Sam! It's on the shelf until the end of the month.", 1440]] },
+  { channel: fb, kind: "comment", author: "Linda Ortiz", subject: "New Pier Street opening hours", sentiment: "neutral", unread: false, msgs: [[false, "Does this include Sundays?", 2900]] },
+];
+for (const c of convo) {
+  const [t] = await db.insert(inboxThreads).values({
+    workspaceId: harbor!.id, channelId: c.channel!.id, kind: c.kind, externalId: `seed-${c.author}`, subject: c.subject, authorName: c.author,
+    sentiment: c.sentiment, unread: c.unread, assignedTo: c.assigned ?? null, lastMessageAt: ago(Math.min(...c.msgs.map((m) => m[2]))),
+  }).returning();
+  await db.insert(inboxMessages).values(c.msgs.map(([fromUs, body, mins]) => ({ threadId: t!.id, fromUs, sentBy: fromUs ? demo!.id : null, authorName: fromUs ? null : c.author, body, createdAt: ago(mins) })));
+}
+
+// Ninety days of daily figures for each Harbor channel, and figures for every published post.
+const rand = (seed: number) => { const x = Math.sin(seed) * 10_000; return x - Math.floor(x); };
+const PROFILE: Record<string, { base: number; eng: number; video: number; clicks: number }> = {
+  instagram: { base: 2600, eng: 0.052, video: 0.35, clicks: 0 },
+  facebook: { base: 1500, eng: 0.031, video: 0.2, clicks: 0.01 },
+  linkedin: { base: 650, eng: 0.029, video: 0, clicks: 0.04 },
+  tiktok: { base: 1900, eng: 0.078, video: 0.9, clicks: 0 },
+};
+const metricRows = [];
+for (const [ci, c] of [ig, fb, li, tt].entries()) {
+  const prof = PROFILE[c!.platform]!;
+  for (let d = 179; d >= 0; d--) {
+    const day = new Date(Date.now() - d * 86_400_000).toISOString().slice(0, 10);
+    const trend = 1 + (179 - d) / 300;
+    const impressions = Math.round(prof.base * trend * (0.75 + 0.5 * rand(d * 7 + ci * 131)) * (1 + 0.25 * Math.sin((d + ci * 3) / 4.3)));
+    metricRows.push({
+      channelId: c!.id, day,
+      followers: Math.round(c!.followers! * (1 - d * 0.0006)),
+      impressions, reach: Math.round(impressions * 0.68),
+      engagements: Math.round(impressions * prof.eng * (0.8 + 0.4 * rand(d + ci))),
+      videoViews: prof.video ? Math.round(impressions * prof.video) : null,
+      linkClicks: prof.clicks ? Math.round(impressions * prof.clicks) : null,
+    });
+  }
+}
+await db.insert(channelMetricsDaily).values(metricRows);
+
+const pastCaptions = [
+  "Cold brew Fridays: half price after 3pm", "Behind the bar: dialing in the espresso at dawn", "Our oat milk cortado, now with a new local oat",
+  "Three ways to brew our Winter Blend at home", "Meet the farmers behind our Ethiopia Guji", "Latte art throwdown recap 🏆",
+  "Pastry case restock: cardamom buns are back", "Why we roast light: a two-minute explainer", "Rainy morning, warm mug. Open till 7pm",
+  "Sneak peek at the new Pier Street mural", "Ten years of Harbor Coffee: thank you", "How we pick a single origin for the menu",
+];
+for (const [i, caption] of pastCaptions.entries()) {
+  const when = new Date(Date.now() - (4 + i * 6) * 86_400_000);
+  const targets = [[ig, fb], [fb, li], [ig, tt], [ig, fb, li]][i % 4]!;
+  const [post] = await db.insert(posts).values({ workspaceId: harbor!.id, authorId: i % 3 ? demo!.id : marcus!.id, caption, status: "published", scheduledAt: when, publishedAt: when }).returning();
+  const rows = await db.insert(postTargets).values(targets.map((c) => ({ postId: post!.id, channelId: c!.id, status: "published" as const, publishedAt: when }))).returning();
+  await db.insert(postMetrics).values(rows.map((r, j) => {
+    const reach = Math.round(1800 + rand(i * 17 + j) * 9000);
+    return { targetId: r.id, reach, impressions: Math.round(reach * 1.4), likes: Math.round(reach * 0.04), comments: Math.round(reach * 0.006), shares: Math.round(reach * 0.004), saves: Math.round(reach * 0.003) };
+  }));
+}
 
 const [q] = await db.insert(queues).values({ workspaceId: harbor!.id, name: "Weekday mornings" }).returning();
 await db.insert(queueSlots).values([1, 2, 3, 4, 5].map((weekday) => ({ queueId: q!.id, weekday, minuteOfDay: 8 * 60 })));
@@ -90,6 +146,8 @@ await db.insert(ideas).values([
   { workspaceId: harbor!.id, title: "Winter Blend tasting notes carousel", column: "writing", tags: ["Seasonal"], createdBy: demo!.id, position: 4 },
   { workspaceId: harbor!.id, title: "Holiday gift guide with partner bakeries", column: "ready", tags: ["Promo"], createdBy: demo!.id, position: 5 },
 ]);
+
+await db.execute(sql`update channels c set last_published_at = (select max(published_at) from post_targets t where t.channel_id = c.id and t.status = 'published')`);
 
 console.log(`Seeded. Sign in as ${EMAIL} / ${PASSWORD}`);
 process.exit(0);

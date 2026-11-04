@@ -11,6 +11,13 @@ export const workspaceInput = z.object({
 export const workspaceSettingsInput = workspaceInput.extend({
   defaultHashtags: z.string().trim().max(500).default(""),
   defaultFirstComment: z.string().trim().max(2000).default(""),
+  // One saved reply per line in the form.
+  savedReplies: z
+    .string()
+    .max(5000)
+    .default("")
+    .transform((v) => [...new Set(v.split("\n").map((l) => l.trim()).filter(Boolean))])
+    .pipe(z.array(z.string().max(300, "Keep each saved reply under 300 characters.")).max(12, "Keep to 12 saved replies or fewer.")),
 });
 
 export const onboardingInput = workspaceInput.extend({
