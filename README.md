@@ -1,8 +1,8 @@
-# auto-schedule
+# BSU Scheduler
 
 Social media planning and publishing for agencies and brands: write once, tailor each channel, schedule, publish, reply and measure.
 
-The product name **YourBrand** is a placeholder. Change it in `src/lib/brand.ts` (or set `NEXT_PUBLIC_BRAND_NAME`).
+The product is **BSU Scheduler**. The name lives in `src/lib/brand.ts` (or `NEXT_PUBLIC_BRAND_NAME`), and the logo files are in `docs/brand/`.
 
 - What the product does: [docs/FEATURE-SPEC.md](docs/FEATURE-SPEC.md)
 - How the code is organised: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)

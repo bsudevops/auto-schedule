@@ -1,4 +1,5 @@
 "use client";
+import { BrandLogo } from "@/components/BrandLogo";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -67,7 +68,7 @@ export function Sidebar(props: { brand: string; tagline: string; current: Ws; wo
   return (
     <aside className={`rail${open ? " open" : ""}`} ref={ref}>
       <div className="brand">
-        <div className="logo">{brand[0]}</div>
+        <BrandLogo />
         <div>
           <div className="brand-name">{brand}</div>
           <div className="brand-sub">{tagline}</div>

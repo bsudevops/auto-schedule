@@ -29,8 +29,8 @@ export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex"
 /** Creates an API key. Only the hash and the prefix are stored. */
 export function newApiKey(): { key: string; prefix: string; hash: string } {
   const secret = randomBytes(24).toString("base64url");
-  const key = `yb_live_${secret}`;
-  return { key, prefix: key.slice(0, 12), hash: sha256(key) };
+  const key = `bsu_live_${secret}`;
+  return { key, prefix: key.slice(0, 13), hash: sha256(key) };
 }
 
 export function safeEqualHex(a: string, b: string): boolean {

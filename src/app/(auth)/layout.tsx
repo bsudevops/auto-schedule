@@ -1,4 +1,5 @@
 import { PlatformBadge } from "@/components/ui";
+import { BrandLogo } from "@/components/BrandLogo";
 import { BRAND } from "@/lib/brand";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
@@ -11,7 +12,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
     <div className="auth">
       <div className="auth-art">
         <div className="row">
-          <div className="logo" style={{ background: "#fff", color: "var(--sky-deep)" }}>{BRAND.name[0]}</div>
+          <BrandLogo size={36} inverse />
           <b style={{ fontFamily: "var(--f-display)", fontSize: 20 }}>{BRAND.name}</b>
         </div>
         <div>

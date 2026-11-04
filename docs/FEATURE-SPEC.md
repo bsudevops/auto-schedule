@@ -2,7 +2,7 @@
 
 This spec describes what the product does, written from studying the features of open-source social media schedulers (Brightbean Studio in particular) and the approved UI prototype. **No code, templates, styles or assets were copied from any other project.** Every line in this repository is written from this spec.
 
-Working name: **YourBrand** (placeholder until the product name and logo are chosen).
+Product name: **BSU Scheduler**.
 
 ## Who it is for
 
