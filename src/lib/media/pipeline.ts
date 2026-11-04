@@ -30,6 +30,20 @@ export type ProcessedFile = {
   variants: Array<{ preset: string; body: Buffer; width: number; height: number }>;
 };
 
+/** What a file is, from its first bytes. Used to check a direct upload without downloading all of it. */
+export async function detectKind(head: Buffer): Promise<{ kind: "image" | "video"; mime: string; videoExt?: string }> {
+  const detected = await fileTypeFromBuffer(head);
+  if (detected && IMAGE_TYPES.has(detected.mime)) return { kind: "image", mime: detected.mime };
+  const videoExt = detected ? VIDEO_TYPES[detected.mime] : undefined;
+  if (detected && videoExt) return { kind: "video", mime: detected.mime, videoExt };
+  throw new UploadError("This file type isn't supported. Upload a JPEG, PNG, WebP, GIF, MP4, MOV or WebM file.");
+}
+
+/** Where a direct upload waits until it has been checked. Only the server hands out these keys. */
+// Under one prefix so the bucket can delete leftovers automatically (a lifecycle rule on "incoming/").
+export const incomingKey = (workspaceId: string) => `incoming/${workspaceId}/${randomUUID()}`;
+export const isIncomingKey = (workspaceId: string, key: string) => new RegExp(`^incoming/${workspaceId}/[0-9a-f-]{36}$`, "i").test(key);
+
 /**
  * Checks and normalises one upload. Images are decoded and re-encoded, which drops metadata
  * and anything hidden after the image data. Output names always use our own extension.

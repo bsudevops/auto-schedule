@@ -8,6 +8,12 @@ export const PUBLISH_ATTEMPTS = 4;
 
 export type PublishJob = { targetId: string };
 
+/**
+ * On Vercel there is no always-on worker: cron routes (src/app/api/cron) do the work instead, so
+ * nothing is put on a queue. Set JOBS_MODE=queue to force the worker, or JOBS_MODE=inline to force cron mode.
+ */
+export const inlineJobs = () => process.env.JOBS_MODE === "inline" || (process.env.JOBS_MODE !== "queue" && Boolean(process.env.VERCEL));
+
 const g = globalThis as unknown as { __publishQueue?: Queue<PublishJob>; __webhookQueue?: Queue<{ deliveryId: string }> };
 
 export function webhookQueue(): Queue<{ deliveryId: string }> {
@@ -25,6 +31,7 @@ export function publishQueue(): Queue<PublishJob> {
  * is waiting or running does nothing. Finished jobs are removed; their outcome lives in the database.
  */
 export async function enqueueTarget(targetId: string) {
+  if (inlineJobs()) return; // the next cron run (or the kick after saving) picks it up
   await publishQueue().add(
     "publish",
     { targetId },

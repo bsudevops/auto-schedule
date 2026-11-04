@@ -405,6 +405,8 @@ export const postTargets = pgTable(
     externalUrl: text("external_url"),
     error: text("error"),
     attempts: smallint("attempts").notNull().default(0),
+    // Cron mode only: the target isn't tried again before this time (retry back-off, rate-limit wait, or a claim in progress).
+    retryAt: timestamp("retry_at", { withTimezone: true }),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     updatedAt: updatedAt(),
   },
@@ -683,6 +685,8 @@ export const webhookDeliveries = pgTable(
     responseCode: integer("response_code"),
     error: text("error"),
     attempts: smallint("attempts").notNull().default(0),
+    // Cron mode only: don't try again before this time.
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
     createdAt: createdAt(),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   },

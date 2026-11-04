@@ -3,7 +3,7 @@ import { and, arrayContains, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { webhookDeliveries, webhooks } from "@/db/schema";
 import { decryptSecret } from "./crypto";
-import { webhookQueue } from "./jobs";
+import { inlineJobs, webhookQueue } from "./jobs";
 import { safePost } from "./safe-http";
 
 export const WEBHOOK_EVENTS = {
@@ -33,6 +33,7 @@ export async function emitEvent(workspaceId: string, event: WebhookEvent, data: 
         .insert(webhookDeliveries)
         .values({ webhookId: h.id, event, payload: { event, workspaceId, createdAt: new Date().toISOString(), data } })
         .returning({ id: webhookDeliveries.id });
+      if (inlineJobs()) continue; // sent by the next cron run
       await webhookQueue().add("deliver", { deliveryId: d!.id }, { jobId: d!.id, attempts: 6, backoff: { type: "exponential", delay: 30_000 }, removeOnComplete: true, removeOnFail: true });
     }
   } catch (e) {

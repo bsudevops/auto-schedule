@@ -7,14 +7,38 @@ import { Icon } from "@/components/Icon";
 export async function uploadFiles(workspaceId: string, files: FileList | File[], folderId?: string) {
   const errors: string[] = [];
   const ids: string[] = [];
+  const post = async (path: string, data: unknown) => {
+    const res = await fetch(`/api/w/${workspaceId}/media/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    return { ok: res.ok, json: (await res.json().catch(() => ({}))) as { id?: string; error?: string; mode?: string; key?: string; url?: string; headers?: Record<string, string> } };
+  };
   for (const file of Array.from(files)) {
-    const body = new FormData();
-    body.set("file", file);
-    if (folderId) body.set("folderId", folderId);
-    const res = await fetch(`/api/w/${workspaceId}/media`, { method: "POST", body });
-    const json = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
-    if (res.ok && json.id) ids.push(json.id);
-    else errors.push(`${file.name}: ${json.error ?? "upload failed"}`);
+    try {
+      // With S3 storage the file goes straight to the bucket; otherwise (local storage) it goes through the app.
+      const start = await post("direct/start", { filename: file.name, size: file.size, folderId: folderId ?? null });
+      if (!start.ok) {
+        errors.push(`${file.name}: ${start.json.error ?? "upload failed"}`);
+        continue;
+      }
+      let result: { ok: boolean; json: { id?: string; error?: string } };
+      if (start.json.mode === "direct") {
+        const put = await fetch(start.json.url!, { method: "PUT", headers: start.json.headers, body: file });
+        if (!put.ok) {
+          errors.push(`${file.name}: the upload to storage failed (${put.status}).`);
+          continue;
+        }
+        result = await post("direct/finish", { key: start.json.key, filename: file.name, folderId: folderId ?? null });
+      } else {
+        const body = new FormData();
+        body.set("file", file);
+        if (folderId) body.set("folderId", folderId);
+        const res = await fetch(`/api/w/${workspaceId}/media`, { method: "POST", body });
+        result = { ok: res.ok, json: (await res.json().catch(() => ({}))) as { id?: string; error?: string } };
+      }
+      if (result.ok && result.json.id) ids.push(result.json.id);
+      else errors.push(`${file.name}: ${result.json.error ?? "upload failed"}`);
+    } catch {
+      errors.push(`${file.name}: couldn't reach the server. Check your connection and try again.`);
+    }
   }
   return { ids, errors };
 }

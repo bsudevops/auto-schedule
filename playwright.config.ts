@@ -6,7 +6,9 @@ import { defineConfig, devices } from "@playwright/test";
  * Starts the app on localhost and the worker, both with dry-run publishing.
  */
 const PORT = Number(process.env.E2E_PORT ?? 3100);
-const env = { PUBLISH_DRY_RUN: "true", SCHEDULER_INTERVAL_MS: "2000", APP_URL: `http://localhost:${PORT}`, BETTER_AUTH_URL: `http://localhost:${PORT}` };
+// E2E_CRON=1 runs the Vercel way: no worker, publishing is done by the app itself and the cron routes.
+const cron = process.env.E2E_CRON === "1";
+const env = { PUBLISH_DRY_RUN: "true", SCHEDULER_INTERVAL_MS: "2000", APP_URL: `http://localhost:${PORT}`, BETTER_AUTH_URL: `http://localhost:${PORT}`, ...(cron ? { JOBS_MODE: "inline", CRON_SECRET: "e2e-cron-secret" } : {}) };
 
 export default defineConfig({
   testDir: "e2e",
@@ -29,6 +31,6 @@ export default defineConfig({
   ],
   webServer: [
     { command: `npx next start -p ${PORT}`, url: `http://localhost:${PORT}/api/health`, timeout: 60_000, reuseExistingServer: !process.env.CI, env },
-    { command: "npm run worker", wait: { stdout: /Worker ready/ }, timeout: 60_000, reuseExistingServer: false, env },
+    ...(cron ? [] : [{ command: "npm run worker", wait: { stdout: /Worker ready/ }, timeout: 60_000, reuseExistingServer: false, env }]),
   ],
 });
