@@ -2,6 +2,7 @@ import { and, eq, gte, isNotNull, not, sql, like } from "drizzle-orm";
 import { db } from "@/db";
 import { channelMetricsDaily, channels, inboxMessages, inboxThreads, postMetrics, postTargets, posts } from "@/db/schema";
 import { classifySentiment } from "../sentiment";
+import { emitEvent } from "../webhooks";
 import { ENGAGE, type Ctx, type RemoteComment } from "./engage";
 import { dryRun } from "./run";
 import { accessTokenFor, flagChannel } from "./tokens";
@@ -130,7 +131,9 @@ async function upsertConversation(c: Channel, t: { id: string; externalPostId: s
   }
   if (newIncoming) {
     // A new message reopens the conversation and marks it unread.
-    await db.update(inboxThreads).set({ unread: true, doneAt: null, lastMessageAt: messages.at(-1)!.createdAt, sentiment: classifySentiment(lastIncoming!.text) }).where(eq(inboxThreads.id, thread!.id));
+    const sentiment = classifySentiment(lastIncoming!.text);
+    await db.update(inboxThreads).set({ unread: true, doneAt: null, lastMessageAt: messages.at(-1)!.createdAt, sentiment }).where(eq(inboxThreads.id, thread!.id));
+    await emitEvent(c.workspaceId, "inbox.message_received", { threadId: thread!.id, channelId: c.id, platform: c.platform, author: lastIncoming!.author, text: lastIncoming!.text, sentiment });
   }
   return newIncoming;
 }

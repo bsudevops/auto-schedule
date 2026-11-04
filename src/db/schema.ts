@@ -595,6 +595,47 @@ export const apiKeys = pgTable("api_keys", {
   createdAt: createdAt(),
 });
 
+/** Outgoing webhooks. The signing secret is encrypted; the full value is shown once when created. */
+export const webhooks = pgTable(
+  "webhooks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    secretEnc: text("secret_enc").notNull(),
+    events: text("events").array().notNull(),
+    active: boolean("active").notNull().default(true),
+    consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+    lastDeliveryAt: timestamp("last_delivery_at", { withTimezone: true }),
+    lastStatus: text("last_status"),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("webhooks_ws_idx").on(t.workspaceId)],
+);
+
+/** Kept for 30 days. */
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    webhookId: uuid("webhook_id")
+      .notNull()
+      .references(() => webhooks.id, { onDelete: "cascade" }),
+    event: text("event").notNull(),
+    payload: jsonb("payload").notNull(),
+    status: text("status").notNull().default("pending"), // pending | delivered | failed
+    responseCode: integer("response_code"),
+    error: text("error"),
+    attempts: smallint("attempts").notNull().default(0),
+    createdAt: createdAt(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  },
+  (t) => [index("webhook_deliveries_hook_idx").on(t.webhookId, t.createdAt)],
+);
+
 /* ------------------------------------------------------------------ */
 /* Relations                                                           */
 /* ------------------------------------------------------------------ */

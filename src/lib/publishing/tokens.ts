@@ -4,6 +4,7 @@ import { channels } from "@/db/schema";
 import { decryptSecret, encryptSecret } from "../crypto";
 import { PLATFORMS } from "../platforms";
 import { notify, workspaceManagers } from "../notify";
+import { emitEvent } from "../webhooks";
 import { providerFor } from "./index";
 import { PublishError } from "./types";
 
@@ -22,6 +23,7 @@ export async function flagChannel(c: Channel, status: "expiring" | "reconnect", 
   }
   await db.update(channels).set({ status, lastError: message }).where(eq(channels.id, c.id));
   const name = PLATFORMS[c.platform].name;
+  await emitEvent(c.workspaceId, "channel.needs_attention", { channelId: c.id, platform: c.platform, handle: c.handle, status, message });
   await notify({
     userIds: await workspaceManagers(c.workspaceId),
     workspaceId: c.workspaceId,

@@ -3,7 +3,9 @@
  * Run with: npm run worker. Several workers can run at once; jobs and post claims never overlap.
  */
 import { DelayedError, Queue, UnrecoverableError, Worker } from "bullmq";
-import { MAINTENANCE_QUEUE, PUBLISH_ATTEMPTS, PUBLISH_QUEUE, enqueueTarget, publishQueue, type PublishJob } from "@/lib/jobs";
+import { MAINTENANCE_QUEUE, PUBLISH_ATTEMPTS, PUBLISH_QUEUE, WEBHOOK_QUEUE, enqueueTarget, publishQueue, webhookQueue, type PublishJob } from "@/lib/jobs";
+import { purgeDeletedOrganizations } from "@/lib/org-deletion";
+import { deliver } from "@/lib/webhooks";
 import { claimDuePosts, dryRun, publishTarget, purgeOldRecords, resetStuckTarget, targetsToQueue } from "@/lib/publishing/run";
 import { syncAll } from "@/lib/publishing/sync";
 import { refreshExpiringTokens } from "@/lib/publishing/tokens";
@@ -23,6 +25,12 @@ const publish = new Worker<PublishJob>(
     return r.outcome;
   },
   { connection, concurrency: Number(process.env.WORKER_CONCURRENCY ?? 5) },
+);
+
+const hooks = new Worker<{ deliveryId: string }>(
+  WEBHOOK_QUEUE,
+  async (job) => deliver(job.data.deliveryId, job.attemptsMade, job.opts.attempts ?? 6),
+  { connection, concurrency: 10 },
 );
 
 /** Finds due posts and makes sure every target that should be publishing has a job. */
@@ -46,7 +54,10 @@ const maintenance = new Worker(
   async (job) => {
     if (job.name === "tick") return tick();
     if (job.name === "refresh-tokens") return refreshExpiringTokens();
-    if (job.name === "purge") return purgeOldRecords();
+    if (job.name === "purge") {
+      await purgeOldRecords();
+      return purgeDeletedOrganizations();
+    }
     if (job.name === "sync-inbox") return syncAll("inbox");
     if (job.name === "sync-insights") return syncAll("insights");
     throw new UnrecoverableError(`Unknown maintenance job ${job.name}`);
@@ -73,8 +84,8 @@ maintenance.on("failed", (job, err) => console.error(`Maintenance job ${job?.nam
 void start();
 
 const stop = async () => {
-  await Promise.all([publish.close(), maintenance.close(), maintenanceQueue.close()]);
-  await publishQueue().close();
+  await Promise.all([publish.close(), hooks.close(), maintenance.close(), maintenanceQueue.close()]);
+  await Promise.all([publishQueue().close(), webhookQueue().close()]);
   await connection.quit();
   process.exit(0);
 };

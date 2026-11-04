@@ -1,0 +1,34 @@
+import { defineConfig, devices } from "@playwright/test";
+
+/**
+ * End-to-end tests against the demo data, on a production build.
+ * Run: npm run build && npm run db:seed && npm run e2e (reseed before running again; the tests change the demo data).
+ * Starts the app on localhost and the worker, both with dry-run publishing.
+ */
+const PORT = Number(process.env.E2E_PORT ?? 3100);
+const env = { PUBLISH_DRY_RUN: "true", SCHEDULER_INTERVAL_MS: "2000", APP_URL: `http://localhost:${PORT}`, BETTER_AUTH_URL: `http://localhost:${PORT}` };
+
+export default defineConfig({
+  testDir: "e2e",
+  fullyParallel: false,
+  workers: 1,
+  retries: process.env.CI ? 1 : 0,
+  timeout: 60_000,
+  expect: { timeout: 15_000 },
+  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
+  outputDir: "e2e/results",
+  use: {
+    baseURL: `http://localhost:${PORT}`,
+    trace: "retain-on-failure",
+    ...devices["Desktop Chrome"],
+    launchOptions: process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
+  },
+  projects: [
+    { name: "setup", testMatch: /auth\.setup\.ts/ },
+    { name: "e2e", testMatch: /\.spec\.ts/, dependencies: ["setup"], use: { storageState: "e2e/results/.auth.json" } },
+  ],
+  webServer: [
+    { command: `npx next start -p ${PORT}`, url: `http://localhost:${PORT}/api/health`, timeout: 60_000, reuseExistingServer: !process.env.CI, env },
+    { command: "npm run worker", wait: { stdout: /Worker ready/ }, timeout: 60_000, reuseExistingServer: false, env },
+  ],
+});

@@ -30,7 +30,7 @@ export const listUserWorkspaces = cache(async (userId: string) =>
     .from(workspaceMembers)
     .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
     .innerJoin(organizations, eq(organizations.id, workspaces.orgId))
-    .where(and(eq(workspaceMembers.userId, userId), isNull(workspaces.archivedAt), isNull(organizations.deletionRequestedAt)))
+    .where(and(eq(workspaceMembers.userId, userId), isNull(workspaces.archivedAt)))
     .orderBy(asc(workspaces.name)),
 );
 

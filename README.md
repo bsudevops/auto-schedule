@@ -7,6 +7,8 @@ The product name **YourBrand** is a placeholder. Change it in `src/lib/brand.ts`
 - What the product does: [docs/FEATURE-SPEC.md](docs/FEATURE-SPEC.md)
 - How the code is organised: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Connecting Instagram, Facebook, LinkedIn and TikTok: [docs/PLATFORM-SETUP.md](docs/PLATFORM-SETUP.md)
+- REST API and webhooks: [docs/API.md](docs/API.md)
+- Going live: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ## Run it locally
 
@@ -33,4 +35,10 @@ To try publishing before the platform apps exist, set `PUBLISH_DRY_RUN=true` in 
 npm run lint && npm run typecheck && npm test && npm run build
 ```
 
-CI runs the same checks on every pull request.
+End-to-end browser tests run against a production build with the demo data and dry-run publishing:
+
+```bash
+npm run db:seed && npm run build && npm run e2e   # reseed before running again
+```
+
+CI runs all of these, plus a Docker image build, on every pull request.

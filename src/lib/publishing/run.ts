@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { channels, mediaAssets, mediaVariants, postMedia, postTargets, posts, publishLog } from "@/db/schema";
 import { publicUrl } from "../media/storage";
 import { notify, workspaceManagers } from "../notify";
+import { emitEvent } from "../webhooks";
 import { PLATFORMS } from "../platforms";
 import { PUBLISHERS, RATE_LIMITS } from "./index";
 import { pickImageKey } from "./media";
@@ -15,8 +16,19 @@ export type Outcome =
   | { outcome: "retry"; error: PublishError }
   | { outcome: "delay"; ms: number };
 
-/** Dry-run mode pretends every publish succeeds. It's for trying the product without platform apps, and is ignored in production. */
-export const dryRun = () => process.env.PUBLISH_DRY_RUN === "true" && process.env.NODE_ENV !== "production";
+/**
+ * Dry-run mode pretends every publish succeeds. It's for trying the product without platform apps.
+ * A production build only honours it when the app runs on localhost (end-to-end tests), never on a real domain.
+ */
+export const dryRun = () => {
+  if (process.env.PUBLISH_DRY_RUN !== "true") return false;
+  if (process.env.NODE_ENV !== "production") return true;
+  try {
+    return ["localhost", "127.0.0.1"].includes(new URL(process.env.APP_URL ?? "").hostname);
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Publishes one post to one channel. Called by the worker for each job.
@@ -116,7 +128,11 @@ export function postStatusFrom(statuses: string[]): "published" | "failed" | "pa
 
 /** Once every target has finished, moves the post to its final status and notifies people. Only one caller wins the change. */
 export async function settlePost(postId: string) {
-  const targets = await db.select({ status: postTargets.status, error: postTargets.error, channelId: postTargets.channelId }).from(postTargets).where(eq(postTargets.postId, postId));
+  const targets = await db
+    .select({ status: postTargets.status, error: postTargets.error, channelId: postTargets.channelId, url: postTargets.externalUrl, platform: channels.platform })
+    .from(postTargets)
+    .innerJoin(channels, eq(channels.id, postTargets.channelId))
+    .where(eq(postTargets.postId, postId));
   const status = postStatusFrom(targets.map((t) => t.status));
   if (status === "publishing") return;
   const anyPublished = targets.some((t) => t.status === "published");
@@ -128,6 +144,12 @@ export async function settlePost(postId: string) {
   if (!post) return;
 
   const title = post.caption.split("\n")[0]!.slice(0, 60) || "Untitled post";
+  await emitEvent(post.workspaceId, status === "published" ? "post.published" : "post.failed", {
+    postId: post.id,
+    status,
+    caption: post.caption,
+    channels: targets.map((t) => ({ channelId: t.channelId, platform: t.platform, status: t.status, url: t.url, error: t.error })),
+  });
   const href = `/w/${post.workspaceId}/posts/${post.id}`;
   if (status === "published") {
     if (post.authorId) await notify({ userIds: [post.authorId], workspaceId: post.workspaceId, type: "post_published", payload: { title: `Published: “${title}”`, href } });
@@ -154,8 +176,11 @@ export async function claimDuePosts(limit = 100): Promise<string[]> {
   const rows = await db.execute<{ id: string }>(sql`
     update posts set status = 'publishing', updated_at = now()
     where id in (
-      select id from posts where status = 'scheduled' and scheduled_at <= now()
-      order by scheduled_at limit ${limit} for update skip locked
+      select p.id from posts p
+      join workspaces w on w.id = p.workspace_id
+      join organizations o on o.id = w.org_id
+      where p.status = 'scheduled' and p.scheduled_at <= now() and o.deletion_requested_at is null and w.archived_at is null
+      order by p.scheduled_at limit ${limit} for update of p skip locked
     )
     returning id`);
   const ids = [...rows].map((r) => r.id);
@@ -188,4 +213,5 @@ export async function purgeOldRecords() {
   await db.execute(sql`delete from publish_log where created_at < now() - interval '90 days'`);
   await db.execute(sql`delete from pending_connections where expires_at < now()`);
   await db.execute(sql`delete from notifications where read_at is not null and created_at < now() - interval '180 days'`);
+  await db.execute(sql`delete from webhook_deliveries where created_at < now() - interval '30 days'`);
 }
