@@ -40,6 +40,18 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * Loads a workspace the signed-in user belongs to and checks a permission.
  * Every workspace page and server action starts here. Non-members get a 404, not a hint that the workspace exists.
  */
+export async function workspaceAccess(workspaceId: string) {
+  const user = await getSessionUser();
+  if (!user || !UUID.test(workspaceId)) return null;
+  const [row] = await db
+    .select({ workspace: workspaces, role: workspaceMembers.role })
+    .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+    .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, user.id), isNull(workspaces.archivedAt)));
+  if (!row) return null;
+  return { user, member: { userId: user.id, role: row.role, active: true } as Member, workspace: row.workspace };
+}
+
 export async function requireWorkspace(workspaceId: string, permission: Permission = "view") {
   const user = await requireUser();
   if (!UUID.test(workspaceId)) notFound();
