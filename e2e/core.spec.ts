@@ -159,3 +159,18 @@ test("Bluesky, DEV and Mastodon connect with a short form", async ({ page }) => 
   await expect(page).toHaveURL(/connect=mastodon/);
   await expect(page.locator('[data-provider="mastodon"] .err')).toContainText("Enter your server's address");
 });
+
+test("hashtag sets save from a caption and insert into another", async ({ page }) => {
+  const base = await openWorkspace(page);
+  await go(page, `${base}/compose`);
+  const caption = page.locator("#caption");
+  await caption.fill("Autumn menu is here #coffee #pumpkin");
+  await page.locator("summary[aria-label=Hashtags]").click();
+  await page.getByPlaceholder("Set name, like Coffee").fill("Autumn");
+  await page.getByRole("button", { name: "Save set" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Hashtag set saved." })).toBeVisible();
+
+  await caption.fill("Weekend hours");
+  await page.locator(".tag-set .mi", { hasText: "Autumn" }).click();
+  await expect(caption).toHaveValue("Weekend hours\n\n#coffee #pumpkin");
+});

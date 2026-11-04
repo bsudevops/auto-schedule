@@ -1,7 +1,9 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { channels, ideas, mediaAssets, postMedia, postTargets, posts, queueSlots, queues } from "@/db/schema";
+import { channels, hashtagSets, ideas, mediaAssets, postMedia, postTargets, posts, queueSlots, queues } from "@/db/schema";
+import { aiConfigured } from "@/lib/ai";
+import { stockConfigured } from "@/lib/stock";
 import { publicUrl } from "@/lib/media/storage";
 import { thumbKey } from "@/lib/media/service";
 import { canEditPost, can, type Member } from "@/lib/permissions";
@@ -16,11 +18,12 @@ function localDateTime(d: Date, timeZone: string) {
 export async function loadComposer(opts: { member: Member; workspace: { id: string; timezone: string; defaultHashtags: string; defaultFirstComment: string }; postId?: string; mediaId?: string; ideaId?: string; date?: string }): Promise<ComposerProps | null> {
   const { member, workspace } = opts;
   const wsId = workspace.id;
-  const [chans, assets, qs] = await Promise.all([
+  const [chans, assets, qs, sets] = await Promise.all([
     db.select({ id: channels.id, platform: channels.platform, handle: channels.handle, displayName: channels.displayName, status: channels.status })
       .from(channels).where(and(eq(channels.workspaceId, wsId), ne(channels.status, "disconnected"))).orderBy(asc(channels.platform)),
     db.select().from(mediaAssets).where(eq(mediaAssets.workspaceId, wsId)).orderBy(desc(mediaAssets.createdAt)).limit(60),
     db.select().from(queues).where(eq(queues.workspaceId, wsId)).orderBy(asc(queues.name)),
+    db.select({ id: hashtagSets.id, name: hashtagSets.name, tags: hashtagSets.tags }).from(hashtagSets).where(eq(hashtagSets.workspaceId, wsId)).orderBy(asc(hashtagSets.name)),
   ]);
   const slots = qs.length ? await db.select().from(queueSlots).where(inArray(queueSlots.queueId, qs.map((q) => q.id))) : [];
   const now = new Date();
@@ -71,6 +74,9 @@ export async function loadComposer(opts: { member: Member; workspace: { id: stri
     channels: chans,
     media: assets.map((a) => ({ id: a.id, kind: a.kind, filename: a.filename, thumb: publicUrl(thumbKey(a.storageKey, a.kind)), url: publicUrl(a.storageKey) })),
     queues: queueOptions,
+    hashtagSets: sets,
+    aiEnabled: aiConfigured(),
+    stockEnabled: stockConfigured() && can(member, "upload_media"),
     initial,
   };
 }

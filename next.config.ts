@@ -9,7 +9,7 @@ const csp = [
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self'",
-  `img-src 'self' data: blob: ${mediaOrigin}`.trim(),
+  `img-src 'self' data: blob: ${mediaOrigin} https://images.pexels.com`.trim(),
   `media-src 'self' blob: ${mediaOrigin}`.trim(),
   "connect-src 'self'",
   "frame-ancestors 'none'",

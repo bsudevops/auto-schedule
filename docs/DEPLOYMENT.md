@@ -35,6 +35,15 @@ Use managed PostgreSQL and Redis, and Cloudflare R2 or AWS S3 for media.
 - Never run `npm run db:seed` against production (it refuses to)
 - Backups: daily PostgreSQL backups, and versioning on the media bucket
 
+## Optional composer extras
+
+Both are off until their key is set, and the composer hides their buttons until then.
+
+- **Writing help** (draft, improve, shorten, three versions, hashtag ideas): set `ANTHROPIC_API_KEY` from console.anthropic.com. It uses `claude-opus-5-5` unless `ANTHROPIC_MODEL` names another model. Each person can ask 30 times an hour. Suggestions are shown to the person and nothing changes until they pick one. Requests opt into Anthropic's server-side fallback, so a request the main model declines can be answered by another model instead of failing.
+- **Free stock photos**: set `PEXELS_API_KEY` from pexels.com/api. Picked photos are copied into the workspace's media library with Pexels' alt text, so they publish like any upload.
+
+Saved hashtag sets need no setup.
+
 ## Scaling
 
 - Run more web containers behind the load balancer; they share nothing but the database and Redis.

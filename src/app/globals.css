@@ -404,3 +404,15 @@ table.tbl{width:100%;border-collapse:collapse}
 .connect-row:first-child{border-top:0;padding-top:0}
 .connect-form{display:flex;flex-direction:column;gap:12px;margin-top:12px;padding:16px;border:1px solid var(--line);border-radius:var(--r);background:var(--ground);max-width:480px}
 .connect-form small{font-size:12px;line-height:1.4}
+
+/* Composer: writing help, hashtag sets */
+.icon-btn.on{background:var(--sky-50);border-color:var(--sky-200);color:var(--sky-deep)}
+.ai-panel{display:flex;flex-direction:column;gap:12px;margin:0 16px 16px;padding:16px;border:1px solid var(--line);border-radius:var(--r);background:var(--ground)}
+.ai-results{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.ai-results li{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+.ai-results p{margin:0;white-space:pre-wrap;font-size:13.5px;line-height:1.5}
+.tag-set{display:flex;align-items:center;gap:4px}
+.tag-set .mi{flex:1;min-width:0;text-align:left}
+.tag-set .mi span{display:flex;flex-direction:column;min-width:0}
+.tag-set small{color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag-save{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:8px 6px 4px;border-top:1px solid var(--line-2)}

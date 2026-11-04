@@ -36,6 +36,13 @@
       "when": 1793792971461,
       "tag": "0004_mastodon_apps",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793793722539,
+      "tag": "0005_hashtag_sets",
+      "breakpoints": true
     }
   ]
 }

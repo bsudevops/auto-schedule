@@ -1,0 +1,110 @@
+"use server";
+import { and, asc, eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { db } from "@/db";
+import { channels, hashtagSets, mediaAssets, type Platform } from "@/db/schema";
+import { AI_TASKS, AiError, aiConfigured, writeWithAI } from "@/lib/ai";
+import { cleanTags } from "@/lib/hashtags";
+import { overLimit } from "@/lib/limits";
+import { UploadError } from "@/lib/media/pipeline";
+import { createAsset, thumbKey } from "@/lib/media/service";
+import { publicUrl } from "@/lib/media/storage";
+import { PLATFORMS } from "@/lib/platforms";
+import { requireWorkspace } from "@/lib/session";
+import { downloadStock, searchStock, StockError, type StockPhoto } from "@/lib/stock";
+
+/* ----------------------------- Writing help ---------------------------- */
+
+const AiInput = z.object({
+  task: z.enum(AI_TASKS),
+  text: z.string().trim().min(1, "Write something first, or a few words about the topic.").max(5000, "That text is too long for writing help."),
+  channelIds: z.array(z.string().uuid()).max(50),
+});
+
+export async function aiWriteAction(workspaceId: string, input: unknown): Promise<{ suggestions: string[] } | { error: string }> {
+  const { user } = await requireWorkspace(workspaceId, "create_posts");
+  if (!aiConfigured()) return { error: "Writing help isn't set up on this server." };
+  const parsed = AiInput.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the text and try again." };
+  if (await overLimit(`ai:${user.id}`, 30, 3600)) return { error: "You've used writing help a lot this hour. Try again later." };
+
+  // Only this workspace's channels count towards the platforms and the character limit.
+  const chans = parsed.data.channelIds.length
+    ? await db.select({ id: channels.id, platform: channels.platform }).from(channels).where(eq(channels.workspaceId, workspaceId))
+    : [];
+  const platforms = [...new Set(chans.filter((c) => parsed.data.channelIds.includes(c.id)).map((c) => c.platform as Platform))];
+  const limit = Math.min(3000, ...platforms.map((p) => PLATFORMS[p].captionLimit));
+  try {
+    return { suggestions: await writeWithAI({ task: parsed.data.task, text: parsed.data.text, platforms: platforms.map((p) => PLATFORMS[p].name), limit }) };
+  } catch (e) {
+    if (e instanceof AiError) return { error: e.message };
+    console.error("Writing help failed", e);
+    return { error: "Writing help didn't work. Try again." };
+  }
+}
+
+/* ----------------------------- Hashtag sets ---------------------------- */
+
+export async function listHashtagSets(workspaceId: string) {
+  await requireWorkspace(workspaceId);
+  return db.select({ id: hashtagSets.id, name: hashtagSets.name, tags: hashtagSets.tags }).from(hashtagSets).where(eq(hashtagSets.workspaceId, workspaceId)).orderBy(asc(hashtagSets.name));
+}
+
+export async function saveHashtagSetAction(workspaceId: string, input: { name: string; tags: string }) {
+  const { user } = await requireWorkspace(workspaceId, "create_posts");
+  const name = z.string().trim().min(1).max(40).safeParse(input.name);
+  if (!name.success) return { error: "Give the set a name up to 40 characters." };
+  const tags = cleanTags(String(input.tags ?? ""));
+  if (!tags.length) return { error: "Add at least one hashtag." };
+  const count = await db.$count(hashtagSets, eq(hashtagSets.workspaceId, workspaceId));
+  const [existing] = await db.select({ id: hashtagSets.id }).from(hashtagSets).where(and(eq(hashtagSets.workspaceId, workspaceId), eq(hashtagSets.name, name.data)));
+  if (existing) await db.update(hashtagSets).set({ tags }).where(eq(hashtagSets.id, existing.id));
+  else {
+    if (count >= 100) return { error: "This workspace already has 100 hashtag sets. Delete one first." };
+    await db.insert(hashtagSets).values({ workspaceId, name: name.data, tags, createdBy: user.id });
+  }
+  revalidatePath(`/w/${workspaceId}/compose`);
+  return { ok: existing ? "Hashtag set updated." : "Hashtag set saved.", sets: await listHashtagSets(workspaceId) };
+}
+
+export async function deleteHashtagSetAction(workspaceId: string, setId: string) {
+  await requireWorkspace(workspaceId, "create_posts");
+  await db.delete(hashtagSets).where(and(eq(hashtagSets.id, setId), eq(hashtagSets.workspaceId, workspaceId)));
+  revalidatePath(`/w/${workspaceId}/compose`);
+  return { ok: "Hashtag set deleted.", sets: await listHashtagSets(workspaceId) };
+}
+
+/* ----------------------------- Stock photos ---------------------------- */
+
+export async function searchStockAction(workspaceId: string, query: string, page = 1): Promise<{ photos: StockPhoto[]; hasMore: boolean } | { error: string }> {
+  const { user } = await requireWorkspace(workspaceId, "upload_media");
+  if (await overLimit(`stock:${user.id}`, 120, 3600)) return { error: "Too many searches this hour. Try again later." };
+  try {
+    return await searchStock(String(query ?? ""), Number(page) || 1);
+  } catch (e) {
+    if (e instanceof StockError) return { error: e.message };
+    console.error("Stock search failed", e);
+    return { error: "Stock photo search didn't work. Try again." };
+  }
+}
+
+/** Adds a stock photo to the media library and returns it ready for the composer. */
+export async function importStockAction(workspaceId: string, photoId: string) {
+  const { user } = await requireWorkspace(workspaceId, "upload_media");
+  if (await overLimit(`stock-import:${user.id}`, 60, 3600)) return { error: "Too many imports this hour. Try again later." };
+  try {
+    const photo = await downloadStock(String(photoId ?? ""));
+    const asset = await createAsset({ workspaceId, userId: user.id, data: photo.data, filename: photo.filename, folderId: null });
+    await db.update(mediaAssets).set({ altText: photo.alt.slice(0, 1000) }).where(eq(mediaAssets.id, asset.id));
+    revalidatePath(`/w/${workspaceId}/media`);
+    return {
+      ok: photo.credit,
+      media: { id: asset.id, kind: asset.kind, filename: asset.filename, thumb: publicUrl(thumbKey(asset.storageKey, asset.kind)), url: publicUrl(asset.storageKey) },
+    };
+  } catch (e) {
+    if (e instanceof StockError || e instanceof UploadError) return { error: e.message };
+    console.error("Stock import failed", e);
+    return { error: "Couldn't add that photo. Try again." };
+  }
+}
