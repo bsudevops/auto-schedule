@@ -108,6 +108,20 @@ test("API keys work, respect scopes and stop working when revoked", async ({ pag
 
   expect((await request.get("/api/v1/posts", { headers: { Authorization: "Bearer bsu_live_nope" } })).status()).toBe(401);
 
+  // The same key works over MCP, and only the tools its scopes allow are offered.
+  const rpc = (method: string, params?: unknown) => request.post("/api/mcp", { headers: auth, data: { jsonrpc: "2.0", id: 1, method, params } });
+  expect((await request.post("/api/mcp", { data: { jsonrpc: "2.0", id: 1, method: "ping" } })).status()).toBe(401);
+  const list = await (await rpc("tools/list")).json();
+  const names = list.result.tools.map((t: { name: string }) => t.name);
+  expect(names).toContain("create_post");
+  expect(names).not.toContain("list_channels");
+  const made = await (await rpc("tools/call", { name: "create_post", arguments: { channelIds: [], caption: "Draft from MCP", mode: "draft" } })).json();
+  expect(made.result.isError).toBeUndefined();
+  const mcpPost = JSON.parse(made.result.content[0].text);
+  expect(mcpPost.status).toBe("draft");
+  expect((await (await rpc("tools/call", { name: "delete_post", arguments: { postId: mcpPost.id } })).json()).result.content[0].text).toBe("Deleted.");
+  expect((await request.get("/api/mcp", { headers: auth })).status()).toBe(405);
+
   await page.getByRole("button", { name: "Done" }).click();
   page.once("dialog", (d) => d.accept());
   await page.getByRole("row", { name: /E2E/ }).getByRole("button", { name: "Revoke" }).click();
