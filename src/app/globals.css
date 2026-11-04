@@ -398,3 +398,36 @@ table.tbl{width:100%;border-collapse:collapse}
 .dot-count{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:10.5px;font-weight:700;display:grid;place-items:center;border:2px solid var(--panel)}
 .notif-menu{left:auto;right:0;width:min(380px,calc(100vw - 32px));max-height:70vh;overflow-y:auto}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* Connect a channel */
+.connect-row{padding:12px 0;border-top:1px solid var(--line-2)}
+.connect-row:first-child{border-top:0;padding-top:0}
+.connect-form{display:flex;flex-direction:column;gap:12px;margin-top:12px;padding:16px;border:1px solid var(--line);border-radius:var(--r);background:var(--ground);max-width:480px}
+.connect-form small{font-size:12px;line-height:1.4}
+
+/* Composer: writing help, hashtag sets */
+.icon-btn.on{background:var(--sky-50);border-color:var(--sky-200);color:var(--sky-deep)}
+.ai-panel{display:flex;flex-direction:column;gap:12px;margin:0 16px 16px;padding:16px;border:1px solid var(--line);border-radius:var(--r);background:var(--ground)}
+.ai-results{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.ai-results li{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+.ai-results p{margin:0;white-space:pre-wrap;font-size:13.5px;line-height:1.5}
+.tag-set{display:flex;align-items:center;gap:4px}
+.tag-set .mi{flex:1;min-width:0;text-align:left}
+.tag-set .mi span{display:flex;flex-direction:column;min-width:0}
+.tag-set small{color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag-save{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:8px 6px 4px;border-top:1px solid var(--line-2)}
+
+/* Analytics: best times */
+.best-times{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.best-times li{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line-2)}
+.best-times li:first-child{border-top:0;padding-top:0}
+.best-times .rank{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--sky-50);color:var(--sky-deep);font-weight:600;font-size:13px;flex:none}
+
+/* Team activity */
+.activity{list-style:none;margin:0;padding:0}
+.activity li{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--line-2);align-items:flex-start}
+.activity li:first-child{border-top:0}
+.activity .who{width:28px;height:28px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--sky-50);color:var(--sky-deep);font-size:12px;font-weight:600;overflow:hidden}
+.activity .what{flex:1;min-width:0;font-size:13.5px;line-height:1.45}
+.activity .what a{color:inherit}
+.activity time{display:block;color:var(--muted);font-size:12px}

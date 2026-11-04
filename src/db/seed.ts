@@ -5,7 +5,7 @@
 import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "./index";
-import { channelMetricsDaily, channels, ideas, inboxMessages, postMetrics, queueChannels, queueSlots, queues, inboxThreads, organizations, orgMembers, posts, postTargets, user, workspaceMembers, workspaces } from "./schema";
+import { activityLog, channelMetricsDaily, channels, ideas, inboxMessages, postMetrics, queueChannels, queueSlots, queues, inboxThreads, organizations, orgMembers, posts, postTargets, user, workspaceMembers, workspaces } from "./schema";
 
 if (process.env.NODE_ENV === "production") throw new Error("Refusing to seed a production database.");
 
@@ -125,7 +125,7 @@ const pastCaptions = [
   "Sneak peek at the new Pier Street mural", "Ten years of Harbor Coffee: thank you", "How we pick a single origin for the menu",
 ];
 for (const [i, caption] of pastCaptions.entries()) {
-  const when = new Date(Date.now() - (4 + i * 6) * 86_400_000);
+  const when = at(-(4 + i * 6), [13, 16, 22, 13, 17, 23, 14][i % 7]!); // posts 7 apart share a weekday and hour
   const targets = [[ig, fb], [fb, li], [ig, tt], [ig, fb, li]][i % 4]!;
   const [post] = await db.insert(posts).values({ workspaceId: harbor!.id, authorId: i % 3 ? demo!.id : marcus!.id, caption, status: "published", scheduledAt: when, publishedAt: when }).returning();
   const rows = await db.insert(postTargets).values(targets.map((c) => ({ postId: post!.id, channelId: c!.id, status: "published" as const, publishedAt: when }))).returning();
@@ -138,6 +138,17 @@ for (const [i, caption] of pastCaptions.entries()) {
 const [q] = await db.insert(queues).values({ workspaceId: harbor!.id, name: "Weekday mornings" }).returning();
 await db.insert(queueSlots).values([1, 2, 3, 4, 5].map((weekday) => ({ queueId: q!.id, weekday, minuteOfDay: 8 * 60 })));
 await db.insert(queueChannels).values([{ queueId: q!.id, channelId: ig!.id }, { queueId: q!.id, channelId: fb!.id }]);
+// Three posts waiting in the queue, so shuffling has something to work on.
+for (const [i, caption] of ["Monday espresso tip: weigh your dose", "Tuesday: meet Dana from the roastery", "Wednesday flight of three single origins"].entries()) {
+  const [post] = await db.insert(posts).values({ workspaceId: harbor!.id, authorId: demo!.id, caption, status: "scheduled", scheduledAt: at(8 + i, 13), queueId: q!.id }).returning();
+  await db.insert(postTargets).values([{ postId: post!.id, channelId: fb!.id }]);
+}
+
+await db.insert(activityLog).values([
+  { workspaceId: harbor!.id, actorId: marcus!.id, verb: "queue.created", summary: "created the queue “Weekday mornings”", href: `/w/${harbor!.id}/calendar?view=queues`, createdAt: at(-3, 14) },
+  { workspaceId: harbor!.id, actorId: null, verb: "post.published", summary: "“From Huila to your cup: this month's washed Caturra.” was published on Instagram, Facebook", createdAt: at(-1, 16) },
+  { workspaceId: harbor!.id, actorId: demo!.id, verb: "post.scheduled", summary: "queued “Monday espresso tip: weigh your dose”", createdAt: at(-1, 17) },
+]);
 
 await db.insert(ideas).values([
   { workspaceId: harbor!.id, title: "Coffee tasting live stream with the roaster", column: "idea", tags: ["Video"], createdBy: demo!.id, position: 1 },

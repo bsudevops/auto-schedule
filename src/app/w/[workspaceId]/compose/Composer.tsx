@@ -7,8 +7,10 @@ import { Icon } from "@/components/Icon";
 import { PlatformBadge, StatusPill } from "@/components/ui";
 import type { Platform } from "@/db/schema";
 import { PLATFORMS } from "@/lib/platforms";
+import { addTags } from "@/lib/hashtags";
 import { checkPost } from "@/lib/post-rules";
 import { uploadFiles } from "../media/MediaControls";
+import { AiPanel, HashtagMenu, StockSearch, type HashtagSet } from "./ComposerTools";
 
 type Mode = "draft" | "now" | "schedule" | "queue";
 type Channel = { id: string; platform: Platform; handle: string; displayName: string; status: string };
@@ -22,6 +24,9 @@ export type ComposerProps = {
   channels: Channel[];
   media: Media[];
   queues: Array<{ id: string; name: string; next: string | null }>;
+  hashtagSets: HashtagSet[];
+  aiEnabled: boolean;
+  stockEnabled: boolean;
   initial: {
     postId?: string;
     channelIds: string[];
@@ -40,7 +45,9 @@ export type ComposerProps = {
 const EMOJI = ["☕", "🎉", "🔥", "✨", "❤️", "👏", "📣", "🙌", "😊", "👉"];
 
 export function Composer(props: ComposerProps) {
-  const { workspaceId, timezone, canPublish, channels, media, queues, initial } = props;
+  const { workspaceId, timezone, canPublish, channels, queues, initial } = props;
+  const [media, setMedia] = useState(props.media);
+  const [aiOpen, setAiOpen] = useState(false);
   const readonly = props.postStatus === "readonly" || props.postStatus === "published" || props.postStatus === "publishing";
   const router = useRouter();
   const [chIds, setChIds] = useState(initial.channelIds);
@@ -110,7 +117,7 @@ export function Composer(props: ComposerProps) {
       {channels.length === 0 ? (
         <div className="card card-b stack" style={{ alignItems: "flex-start" }}>
           <h3>Connect a channel first</h3>
-          <p className="muted">Posts go out through connected channels. Connect Instagram, Facebook, LinkedIn or TikTok to start.</p>
+          <p className="muted">Posts go out through connected channels. Connect a social account to start.</p>
           <Link className="btn primary" href={`/w/${workspaceId}/channels`}>Go to channels</Link>
         </div>
       ) : (
@@ -166,7 +173,10 @@ export function Composer(props: ComposerProps) {
                       {EMOJI.map((e) => <button type="button" key={e} className="mi" style={{ width: 36, justifyContent: "center" }} onClick={() => insert(e)}>{e}</button>)}
                     </div>
                   </details>
-                  <button type="button" className="icon-btn" title="Insert hashtag" aria-label="Insert hashtag" onClick={() => insert("#")}><Icon name="hash" /></button>
+                  <HashtagMenu workspaceId={workspaceId} sets={props.hashtagSets} caption={text} onHash={() => insert("#")} onInsert={(t) => setText(addTags(text, t))} />
+                  {props.aiEnabled && (
+                    <button type="button" className={`icon-btn${aiOpen ? " on" : ""}`} title="Writing help" aria-label="Writing help" aria-expanded={aiOpen} onClick={() => setAiOpen((o) => !o)}><Icon name="spark" /></button>
+                  )}
                   <div className="counters">
                     {selected.map((c) => {
                       const len = (overrides[c.id] ?? caption).length;
@@ -175,12 +185,16 @@ export function Composer(props: ComposerProps) {
                     })}
                   </div>
                 </div>
+                {aiOpen && (
+                  <AiPanel workspaceId={workspaceId} text={text} channelIds={chIds} onClose={() => setAiOpen(false)}
+                    onUse={(v, how) => setText(how === "tags" ? addTags(text, v.split(/\s+/)) : v)} />
+                )}
               </section>
 
               <section className="card"><div className="card-b stack">
                 <label className="field"><span>Tags <span className="muted" style={{ fontWeight: 400 }}>(comma-separated, for your team only)</span></span>
                   <input className="input" id="tags" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="fall-campaign, cold-brew" /></label>
-                <label className="field"><span>First comment <span className="muted" style={{ fontWeight: 400 }}>(Instagram, Facebook, LinkedIn)</span></span>
+                <label className="field"><span>First comment <span className="muted" style={{ fontWeight: 400 }}>(posted as a reply where the platform allows it)</span></span>
                   <input className="input" id="first-comment" value={firstComment} onChange={(e) => setFirstComment(e.target.value)} maxLength={2200} placeholder="Add hashtags or a link as the first comment" /></label>
               </div></section>
             </div>
@@ -252,7 +266,8 @@ export function Composer(props: ComposerProps) {
         </fieldset>
       )}
 
-      {picker && <MediaPicker workspaceId={workspaceId} media={media} chosen={mediaIds} onClose={() => setPicker(false)} onPick={(id) => { setMediaIds((ids) => (ids.includes(id) ? ids : [...ids, id].slice(0, 10))); setPicker(false); }} />}
+      {picker && <MediaPicker workspaceId={workspaceId} media={media} chosen={mediaIds} stockEnabled={props.stockEnabled}
+        onStock={(m) => { setMedia((all) => [m, ...all.filter((x) => x.id !== m.id)]); setMediaIds((ids) => (ids.includes(m.id) ? ids : [...ids, m.id].slice(0, 10))); setPicker(false); }} onClose={() => setPicker(false)} onPick={(id) => { setMediaIds((ids) => (ids.includes(id) ? ids : [...ids, id].slice(0, 10))); setPicker(false); }} />}
     </>
   );
 }
@@ -270,8 +285,9 @@ function DeleteButton({ workspaceId, postId }: { workspaceId: string; postId: st
   );
 }
 
-function MediaPicker({ workspaceId, media, chosen, onClose, onPick }: { workspaceId: string; media: Media[]; chosen: string[]; onClose: () => void; onPick: (id: string) => void }) {
+function MediaPicker({ workspaceId, media, chosen, stockEnabled, onStock, onClose, onPick }: { workspaceId: string; media: Media[]; chosen: string[]; stockEnabled: boolean; onStock: (m: Media) => void; onClose: () => void; onPick: (id: string) => void }) {
   const router = useRouter();
+  const [tab, setTab] = useState<"library" | "stock">("library");
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   return (
@@ -279,6 +295,13 @@ function MediaPicker({ workspaceId, media, chosen, onClose, onPick }: { workspac
       <div className="modal" role="dialog" aria-modal="true" aria-label="Add media">
         <div className="modal-h"><h2>Add media</h2><button type="button" className="icon-btn" aria-label="Close" onClick={onClose}><Icon name="x" /></button></div>
         <div className="modal-b">
+          {stockEnabled && (
+            <div className="seg" role="tablist" style={{ alignSelf: "flex-start" }}>
+              <button type="button" role="tab" aria-selected={tab === "library"} className={tab === "library" ? "on" : ""} onClick={() => setTab("library")}>Your library</button>
+              <button type="button" role="tab" aria-selected={tab === "stock"} className={tab === "stock" ? "on" : ""} onClick={() => setTab("stock")}>Free stock photos</button>
+            </div>
+          )}
+          {tab === "stock" ? <StockSearch workspaceId={workspaceId} onAdded={onStock} /> : <>
           <label className="btn" style={{ cursor: "pointer", width: "max-content" }}>
             <Icon name="upload" /> {busy ? "Uploading…" : "Upload from your computer"}
             <input type="file" hidden multiple accept="image/*,video/mp4,video/quicktime,video/webm" disabled={busy}
@@ -307,6 +330,7 @@ function MediaPicker({ workspaceId, media, chosen, onClose, onPick }: { workspac
               ))}
             </div>
           ) : <p className="muted">Your media library is empty. Upload a file to get started.</p>}
+          </>}
         </div>
       </div>
     </div>

@@ -41,8 +41,8 @@ describe("Meta OAuth", () => {
     expect(accts[1]).toMatchObject({ accessToken: "page-token", handle: "harborcoffee", followers: 1800, meta: { pageId: "p1" } });
   });
 
-  it("asks for the publishing scopes and passes the state through", () => {
-    const u = new URL(metaProvider.authorizeUrl("st4te", "https://app/cb"));
+  it("asks for the publishing scopes and passes the state through", async () => {
+    const u = new URL(await metaProvider.authorizeUrl("st4te", "https://app/cb"));
     expect(u.searchParams.get("state")).toBe("st4te");
     expect(u.searchParams.get("scope")).toContain("instagram_content_publish");
   });

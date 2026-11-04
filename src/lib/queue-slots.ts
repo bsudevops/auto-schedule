@@ -43,3 +43,18 @@ export function zonedToUtc(y: number, mo: number, d: number, h: number, mi: numb
   const asIfUtc = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour), Number(p.minute));
   return new Date(guess - (asIfUtc - guess));
 }
+
+/**
+ * Gives queued posts a new order without changing which times are used: the same set of times is
+ * dealt out again at random. With two or more posts the order always changes.
+ */
+export function shuffleTimes<T extends { id: string; at: Date }>(items: T[], rand: () => number = Math.random): Array<{ id: string; at: Date }> {
+  const times = items.map((i) => i.at);
+  for (let i = times.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [times[i], times[j]] = [times[j]!, times[i]!];
+  }
+  // A shuffle can land on the original order; rotate by one so the button always does something.
+  if (items.length > 1 && times.every((t, i) => t.getTime() === items[i]!.at.getTime())) times.push(times.shift()!);
+  return items.map((it, i) => ({ id: it.id, at: times[i]! }));
+}

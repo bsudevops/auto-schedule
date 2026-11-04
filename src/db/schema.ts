@@ -22,6 +22,23 @@ const updatedAt = () =>
     .defaultNow()
     .$onUpdate(() => new Date());
 
+/**
+ * Mastodon has no central app registry: we register an app on each server the first time someone
+ * connects from it, and reuse it after that. The secret is encrypted.
+ */
+export const mastodonApps = pgTable(
+  "mastodon_apps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    instance: text("instance").notNull(),
+    redirectUri: text("redirect_uri").notNull(),
+    clientId: text("client_id").notNull(),
+    clientSecretEnc: text("client_secret_enc").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("mastodon_apps_instance_redirect_uq").on(t.instance, t.redirectUri)],
+);
+
 /* ------------------------------------------------------------------ */
 /* Auth tables (shape required by Better Auth)                         */
 /* ------------------------------------------------------------------ */
@@ -448,6 +465,42 @@ export const ideas = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("ideas_ws_col_idx").on(t.workspaceId, t.column, t.position)],
+);
+
+/** What the team did in a workspace, newest first on the overview. Kept for 180 days. */
+export const activityLog = pgTable(
+  "activity_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    actorId: text("actor_id").references(() => user.id, { onDelete: "set null" }),
+    verb: text("verb").notNull(),
+    summary: text("summary").notNull(),
+    href: text("href"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("activity_ws_created_idx").on(t.workspaceId, t.createdAt)],
+);
+
+/** Named groups of hashtags people insert into captions with one click. */
+export const hashtagSets = pgTable(
+  "hashtag_sets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tags: text("tags")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("hashtag_sets_ws_name_uq").on(t.workspaceId, t.name)],
 );
 
 /* ------------------------------------------------------------------ */

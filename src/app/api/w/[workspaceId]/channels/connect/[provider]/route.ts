@@ -15,10 +15,22 @@ export async function GET(req: Request, { params }: { params: Promise<{ workspac
   if (!can(access.member, "manage_channels")) return NextResponse.redirect(`${back}?error=forbidden`);
   if (!isProvider(provider)) return new NextResponse("Not found", { status: 404 });
   const adapter = PROVIDERS[provider];
+  if (adapter.connect === "credentials") return NextResponse.redirect(`${back}?connect=${provider}`);
   if (!adapter.configured()) return NextResponse.redirect(`${back}?error=not_configured`);
 
-  const { state, cookie } = newConnectState(workspaceId, provider, access.user.id);
-  const res = NextResponse.redirect(adapter.authorizeUrl(state, callbackUrl(provider)));
+  // Providers that need input first (a Mastodon server) get it as query parameters from the form on the channels page.
+  let ctx: Record<string, string> | undefined;
+  if (adapter.contextFields?.length) {
+    const url = new URL(req.url);
+    const input = Object.fromEntries(adapter.contextFields.map((f) => [f.name, url.searchParams.get(f.name) ?? ""]));
+    if (Object.values(input).every((v) => !v)) return NextResponse.redirect(`${back}?connect=${provider}`);
+    const prepared = await adapter.prepareContext!(input, callbackUrl(provider));
+    if (!prepared.ok) return NextResponse.redirect(`${back}?connect=${provider}&error=context&detail=${encodeURIComponent(prepared.error)}`);
+    ctx = prepared.ctx;
+  }
+
+  const { state, cookie } = newConnectState(workspaceId, provider, access.user.id, ctx);
+  const res = NextResponse.redirect(await adapter.authorizeUrl(state, callbackUrl(provider), ctx));
   res.cookies.set(cookie.name, cookie.value, cookie.options);
   return res;
 }

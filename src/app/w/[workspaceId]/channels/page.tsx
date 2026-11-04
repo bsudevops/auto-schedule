@@ -11,6 +11,7 @@ import { dryRun } from "@/lib/publishing/run";
 import { slotsUsed } from "@/lib/publishing/rate-limit";
 import { requireWorkspace } from "@/lib/session";
 import { ChannelButtons } from "./ChannelButtons";
+import { ConnectList, type ConnectOption } from "./ConnectList";
 
 export const metadata = { title: "Channels" };
 
@@ -20,7 +21,19 @@ const ERRORS: Record<string, string> = {
   not_configured: "That platform isn't set up yet. Add its app credentials to the server's environment first.",
   connect_expired: "That connection attempt expired. Start again.",
   no_accounts: "The platform didn't return any accounts you can post to. For Instagram, the account must be a business or creator account linked to a Facebook Page.",
+  context: "We couldn't reach that server. Check the address and try again.",
   failed: "The platform didn't accept the connection. Try again, and check the server logs if it keeps failing.",
+};
+
+/** Pages, boards and locations are names, not @handles. */
+function shownHandle(platform: string, handle: string) {
+  return ["facebook", "google_business", "pinterest", "youtube"].includes(platform) || handle.startsWith("@") ? handle : `@${handle}`;
+}
+
+const HINTS: Record<string, string> = {
+  bluesky: "Connects with an app password",
+  devto: "Connects with an API key",
+  mastodon: "Asks for your server, then you sign in there",
 };
 
 function relative(d: Date | null) {
@@ -60,12 +73,21 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       }
     }),
   );
-  const providers = Object.values(PROVIDERS);
+  const options: ConnectOption[] = Object.values(PROVIDERS).map((p) => ({
+    id: p.id,
+    name: p.name,
+    platforms: p.platforms,
+    configured: p.configured(),
+    envVars: p.envVars,
+    kind: p.connect === "credentials" ? "credentials" : p.contextFields ? "context" : "oauth",
+    fields: p.fields ?? p.contextFields ?? [],
+    hint: HINTS[p.id],
+  }));
   const connectHref = (platform: (typeof rows)[number]["platform"]) => {
     const p = providerFor(platform);
     return p ? `/api/w/${workspaceId}/channels/connect/${p.id}` : null;
   };
-  const errorMsg = sp.error ? ERRORS[sp.error] ?? ERRORS.failed : null;
+  const errorMsg = sp.error && sp.error !== "context" ? ERRORS[sp.error] ?? ERRORS.failed : null;
 
   return (
     <>
@@ -104,7 +126,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
                       <StatusPill status={c.status} />
                     </div>
                     <div className="muted" style={{ fontSize: 13 }}>
-                      {PLATFORMS[c.platform].name} · {c.platform === "facebook" ? c.handle : `@${c.handle}`} · {c.lastError ?? relative(c.lastPublishedAt)}
+                      {PLATFORMS[c.platform].name} · {shownHandle(c.platform, c.handle)} · {c.lastError ?? relative(c.lastPublishedAt)}
                     </div>
                     <div className="row" style={{ gap: 18, marginTop: 12, flexWrap: "wrap", fontSize: 12.5 }}>
                       {c.followers != null && (
@@ -125,30 +147,15 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       <div className="card card-b" style={{ marginTop: 16 }}>
         <h3>Connect a channel</h3>
         <p className="muted" style={{ fontSize: 13 }}>
-          {manage ? "You'll sign in on the platform's own site and choose which accounts to add." : "Ask an owner or manager to connect channels."}
+          {manage ? "Most platforms ask you to sign in on their own site. Bluesky and DEV.to use an app password or API key instead, and Mastodon asks for your server first. You then choose which accounts to add." : "Ask an owner or manager to connect channels."}
         </p>
-        <div className="stack" style={{ marginTop: 12, gap: 10 }}>
-          {providers.map((p) => {
-            const ok = p.configured();
-            return (
-              <div key={p.id} className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-                <div className="row" style={{ gap: 8 }}>
-                  {p.platforms.map((pl) => <PlatformBadge key={pl} platform={pl} />)}
-                  <b style={{ fontSize: 14 }}>{p.name}</b>
-                  {!ok && <span className="muted" style={{ fontSize: 12.5 }}>Needs {p.envVars.join(" and ")} on the server</span>}
-                </div>
-                {manage && ok ? (
-                  <a className="btn sm primary" href={`/api/w/${workspaceId}/channels/connect/${p.id}`}><Icon name="plus" /> Connect</a>
-                ) : (
-                  <button className="btn sm" disabled>{ok ? "Connect" : "Not set up"}</button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        <p className="muted" style={{ fontSize: 12.5, marginTop: 14 }}>
-          Coming later: {Object.entries(PLATFORMS).filter(([, v]) => !v.firstRelease).map(([, v]) => v.name).join(", ")}.
-        </p>
+        <ConnectList
+          workspaceId={workspaceId}
+          options={options}
+          manage={manage}
+          open={sp.connect}
+          contextError={sp.error === "context" ? sp.detail?.slice(0, 200) ?? ERRORS.context : undefined}
+        />
       </div>
 
       {gone.length > 0 && (

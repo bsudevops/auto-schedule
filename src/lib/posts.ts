@@ -7,6 +7,7 @@ import { can, canEditPost, type Member } from "./permissions";
 import { checkPost } from "./post-rules";
 import { nextOpenSlot, zonedToUtc } from "./queue-slots";
 import { enqueueTarget } from "./jobs";
+import { logActivity, postTitle } from "./activity";
 
 export const postInput = z.object({
   postId: z.string().uuid().optional(),
@@ -95,6 +96,9 @@ export async function savePost(ctx: Ctx, raw: unknown): Promise<Result> {
     if (orderedMedia.length) await tx.insert(postMedia).values(orderedMedia.map((m, i) => ({ postId: postId!, assetId: m.id, position: i })));
     return postId!;
   });
+  const verb = status === "scheduled" ? "post.scheduled" : existing ? "post.updated" : "post.created";
+  const what = status === "scheduled" ? (input.mode === "now" ? "sent" : input.mode === "queue" ? "queued" : "scheduled") : existing ? "updated" : "drafted";
+  await logActivity({ workspaceId: wsId, actorId: ctx.member.userId, verb, summary: `${what} ${postTitle(input.caption)}`, href: `/w/${wsId}/posts/${id}` });
   return { ok: true, id, scheduledAt, status };
 }
 
@@ -108,6 +112,7 @@ export async function reschedulePost(ctx: Ctx, postId: string, at: Date): Promis
   if (at.getTime() < Date.now() + 60_000) return { ok: false, error: "Pick a time in the future." };
   // A draft dropped on the calendar keeps its draft status and just gets a planned date.
   await db.update(posts).set({ scheduledAt: at, queueId: null }).where(eq(posts.id, p.id));
+  await logActivity({ workspaceId: ctx.workspace.id, actorId: ctx.member.userId, verb: "post.rescheduled", summary: `moved ${postTitle(p.caption)}`, href: `/w/${ctx.workspace.id}/posts/${p.id}` });
   return { ok: true };
 }
 
@@ -116,6 +121,7 @@ export async function deletePost(ctx: Ctx, postId: string): Promise<{ ok: boolea
   if (!p) return { ok: false, error: "That post no longer exists." };
   if (!canEditPost(ctx.member, p) && !(p.status === "published" && can(ctx.member, "edit_others_posts"))) return { ok: false, error: "You can't delete this post." };
   await db.delete(posts).where(eq(posts.id, p.id));
+  await logActivity({ workspaceId: ctx.workspace.id, actorId: ctx.member.userId, verb: "post.deleted", summary: `deleted ${postTitle(p.caption)}` });
   return { ok: true };
 }
 
@@ -138,5 +144,6 @@ export async function retryFailed(ctx: Ctx, postId: string): Promise<{ ok: boole
   if (!ids.length) return { ok: false, error: "Nothing to retry." };
   // The worker also picks up pending targets on its next pass, so a Redis hiccup here only delays the retry.
   await Promise.all(ids.map((id) => enqueueTarget(id).catch(() => undefined)));
+  await logActivity({ workspaceId: ctx.workspace.id, actorId: ctx.member.userId, verb: "post.retried", summary: `retried ${postTitle(p.caption)} on ${ids.length} channel${ids.length === 1 ? "" : "s"}`, href: `/w/${ctx.workspace.id}/posts/${p.id}` });
   return { ok: true, count: ids.length };
 }

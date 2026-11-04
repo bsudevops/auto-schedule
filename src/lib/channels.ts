@@ -4,18 +4,18 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { channels, pendingConnections } from "@/db/schema";
 import { decryptSecret, encryptSecret } from "./crypto";
-import type { ConnectedAccount, Provider } from "./publishing/types";
+import type { ConnectContext, ConnectedAccount, Provider } from "./publishing/types";
 
 export const CONNECT_COOKIE = "oauth_connect";
 export const CALLBACK_PATH = "/api/channels/callback";
 const TEN_MINUTES = 600;
 
-type ConnectState = { state: string; workspaceId: string; provider: Provider; userId: string; exp: number };
+type ConnectState = { state: string; workspaceId: string; provider: Provider; userId: string; exp: number; ctx?: ConnectContext };
 
 /** The OAuth state lives in an encrypted, httpOnly cookie, bound to the user, workspace and provider. */
-export function newConnectState(workspaceId: string, provider: Provider, userId: string) {
+export function newConnectState(workspaceId: string, provider: Provider, userId: string, ctx?: ConnectContext) {
   const state = randomBytes(24).toString("base64url");
-  const cookie = encryptSecret(JSON.stringify({ state, workspaceId, provider, userId, exp: Date.now() + TEN_MINUTES * 1000 } satisfies ConnectState));
+  const cookie = encryptSecret(JSON.stringify({ state, workspaceId, provider, userId, exp: Date.now() + TEN_MINUTES * 1000, ...(ctx ? { ctx } : {}) } satisfies ConnectState));
   return {
     state,
     cookie: {

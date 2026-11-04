@@ -10,7 +10,14 @@ Every app needs the same redirect URL pattern:
 {APP_URL}/api/channels/callback/meta
 {APP_URL}/api/channels/callback/linkedin
 {APP_URL}/api/channels/callback/tiktok
+{APP_URL}/api/channels/callback/threads
+{APP_URL}/api/channels/callback/youtube
+{APP_URL}/api/channels/callback/google_business
+{APP_URL}/api/channels/callback/pinterest
+{APP_URL}/api/channels/callback/mastodon
 ```
+
+Bluesky, Mastodon and DEV.to need no developer app at all. People connect them from the Channels page with an app password, their server's address, or an API key.
 
 Media is sent to platforms by URL, so `MEDIA_PUBLIC_URL` must be a public HTTPS address (S3, R2 or a CDN) in production. `localhost` won't work for real publishing.
 
@@ -44,6 +51,50 @@ LinkedIn tokens last 60 days. The Channels page warns a week ahead, and owners a
 4. Set `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET`.
 
 Until TikTok audits the app, videos can only be posted as private. The product tells you when that happens.
+
+## Threads
+
+Threads has its own app ID and secret, separate from Facebook's.
+
+1. At developers.facebook.com, create an app and choose the **Access the Threads API** use case.
+2. Under *Threads API → Settings*, add the redirect URL above to *Redirect Callback URLs*, and fill in the uninstall and delete callback URLs (any page on your site works while testing).
+3. Request the permissions `threads_basic`, `threads_content_publish`, `threads_manage_replies`, `threads_read_replies` and `threads_manage_insights`.
+4. Set `THREADS_APP_ID` and `THREADS_APP_SECRET` (shown under *Threads API → Settings*, not the main app settings).
+
+While the app is in development, add each tester under *App roles → Threads testers*, and they must accept the invite in the Threads app. Tokens last 60 days and the worker renews them automatically.
+
+## YouTube and Google Business Profile
+
+One Google Cloud OAuth client covers both.
+
+1. At console.cloud.google.com, create a project. Enable the **YouTube Data API v3** and, for Business Profile, the **My Business Account Management API**, **My Business Business Information API** and **Google My Business API**.
+2. Under *APIs & Services → OAuth consent screen*, set up the app and add the scopes `youtube.upload`, `youtube.readonly`, `youtube.force-ssl` and `business.manage`.
+3. Under *Credentials*, create an **OAuth client ID** of type *Web application* and add both Google redirect URLs above.
+4. Set `GOOGLE_PUBLISH_CLIENT_ID` and `GOOGLE_PUBLISH_CLIENT_SECRET`. These are separate from any Google sign-in keys.
+5. Optional: set `YOUTUBE_PRIVACY_STATUS` to `private` or `unlisted` to change the default for new uploads.
+
+Videos uploaded by an unverified Google project are locked to private until Google audits it (*YouTube API Services audit*). Business Profile API access must be requested from Google before the APIs return data. The YouTube API allows about six uploads a day per project by default.
+
+## Pinterest
+
+1. At developers.pinterest.com, create an app and request **Standard access**.
+2. Add the redirect URL above and the scopes `boards:read`, `pins:read`, `pins:write` and `user_accounts:read`.
+3. Set `PINTEREST_APP_ID` and `PINTEREST_APP_SECRET`.
+4. Before Standard access is approved, set `PINTEREST_SANDBOX=true` to post to Pinterest's sandbox instead.
+
+Each public board shows up as its own channel. Secret boards are left out.
+
+## Bluesky
+
+Nothing to set up on the server. On the Channels page, enter the account's handle and an **app password** made in Bluesky under *Settings → Privacy and security → App passwords*. The app password is stored encrypted and can be revoked in Bluesky at any time. Bluesky video isn't supported yet.
+
+## Mastodon
+
+Nothing to set up on the server. On the Channels page, enter the server the account lives on (for example `mastodon.social`). The product registers itself with that server the first time and then sends the person to its sign-in page. Only public internet addresses are accepted.
+
+## DEV.to
+
+Nothing to set up on the server. On the Channels page, paste an API key from dev.to under *Settings → Extensions → DEV Community API Keys*. The first line of a post becomes the article title, and up to four hashtags become its tags.
 
 ## How publishing works
 

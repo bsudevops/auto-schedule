@@ -33,7 +33,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ provider
   if (!code || url.searchParams.get("error")) return back("error=cancelled");
 
   try {
-    const accounts = await PROVIDERS[provider].exchangeCode(code, callbackUrl(provider));
+    const accounts = await PROVIDERS[provider].exchangeCode(code, callbackUrl(provider), state.ctx);
     if (!accounts.length) return back(`error=no_accounts&provider=${provider}`);
     const pendingId = await savePending(state.workspaceId, user.id, provider, accounts);
     return NextResponse.redirect(new URL(`/w/${state.workspaceId}/channels/connect?pending=${pendingId}`, appUrl));

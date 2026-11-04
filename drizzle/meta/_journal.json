@@ -29,6 +29,27 @@
       "when": 1793780395989,
       "tag": "0003_platform",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793792971461,
+      "tag": "0004_mastodon_apps",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793793722539,
+      "tag": "0005_hashtag_sets",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793794440876,
+      "tag": "0006_activity_log",
+      "breakpoints": true
     }
   ]
 }

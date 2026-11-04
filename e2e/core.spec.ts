@@ -141,3 +141,51 @@ test("health check answers", async ({ request }) => {
   expect(r.status()).toBe(200);
   expect(await r.json()).toEqual({ ok: true, database: true, redis: true });
 });
+
+test("Bluesky, DEV and Mastodon connect with a short form", async ({ page }) => {
+  const base = await openWorkspace(page);
+  await go(page, `${base}/channels`);
+  const bsky = page.locator('[data-provider="bluesky"]');
+  await bsky.getByRole("button", { name: "Connect" }).click();
+  await bsky.getByLabel("Handle or email").fill("harbor.bsky.social");
+  await bsky.getByLabel("App password").fill("my main password");
+  await bsky.getByRole("button", { name: "Connect" }).last().click();
+  await expect(bsky.locator(".err")).toContainText("doesn't look like an app password");
+
+  const masto = page.locator('[data-provider="mastodon"]');
+  await masto.getByRole("button", { name: "Connect" }).click();
+  await masto.getByLabel("Your Mastodon server").fill("not a server");
+  await masto.getByRole("button", { name: "Continue to sign in" }).click();
+  await expect(page).toHaveURL(/connect=mastodon/);
+  await expect(page.locator('[data-provider="mastodon"] .err')).toContainText("Enter your server's address");
+});
+
+test("hashtag sets save from a caption and insert into another", async ({ page }) => {
+  const base = await openWorkspace(page);
+  await go(page, `${base}/compose`);
+  const caption = page.locator("#caption");
+  await caption.fill("Autumn menu is here #coffee #pumpkin");
+  await page.locator("summary[aria-label=Hashtags]").click();
+  await page.getByPlaceholder("Set name, like Coffee").fill("Autumn");
+  await page.getByRole("button", { name: "Save set" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Hashtag set saved." })).toBeVisible();
+
+  await caption.fill("Weekend hours");
+  await page.locator(".tag-set .mi", { hasText: "Autumn" }).click();
+  await expect(caption).toHaveValue("Weekend hours\n\n#coffee #pumpkin");
+});
+
+test("queues shuffle, best times show, and the team sees it in activity", async ({ page }) => {
+  const base = await openWorkspace(page);
+  await go(page, `${base}/calendar?view=queues`);
+  await page.getByRole("button", { name: "Shuffle order" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Shuffled 3 posts" })).toBeVisible();
+
+  await go(page, `${base}/analytics`);
+  await expect(page.locator(".best-times li").first()).toBeVisible();
+
+  await go(page, base);
+  await expect(page.locator(".activity").first()).toContainText("shuffled 3 posts in “Weekday mornings”");
+  await page.getByRole("link", { name: "See all" }).last().click();
+  await expect(page.getByRole("heading", { name: "Team activity" })).toBeVisible();
+});
