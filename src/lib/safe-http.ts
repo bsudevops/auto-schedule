@@ -118,3 +118,46 @@ export async function safePost(raw: string, body: string, headers: Record<string
     req.end(body);
   });
 }
+
+export type SafeRequestInit = { method?: string; headers?: Record<string, string>; body?: string | Buffer; timeoutMs?: number; maxBytes?: number };
+
+/**
+ * A general request to a host a customer chose (a Mastodon server): https only, public addresses only
+ * (checked on the address actually connected to), no redirects, capped time and size.
+ */
+export async function safeRequest(raw: string, init: SafeRequestInit = {}): Promise<{ status: number; headers: Record<string, string>; text: string }> {
+  const checked = checkWebhookUrl(raw);
+  if (!checked.ok) throw new Error(checked.error);
+  const url = checked.url;
+  const lib = url.protocol === "https:" ? https : http;
+  const { method = "GET", headers = {}, body, timeoutMs = 30_000, maxBytes = 2 * 1024 * 1024 } = init;
+  return new Promise((resolve, reject) => {
+    const req = lib.request(
+      url,
+      {
+        method,
+        headers: { "User-Agent": "BSU-Scheduler/1.0", ...(body !== undefined ? { "Content-Length": Buffer.byteLength(body).toString() } : {}), ...headers },
+        lookup: guardedLookup as unknown as typeof dns.lookup,
+        timeout: timeoutMs,
+      },
+      (res) => {
+        let size = 0;
+        const chunks: Buffer[] = [];
+        res.on("data", (c: Buffer) => {
+          size += c.length;
+          if (size > maxBytes) return res.destroy(new Error("The response was too large."));
+          chunks.push(c);
+        });
+        res.on("end", () => {
+          const h: Record<string, string> = {};
+          for (const [k, v] of Object.entries(res.headers)) if (v !== undefined) h[k] = Array.isArray(v) ? v.join(", ") : v;
+          resolve({ status: res.statusCode ?? 0, headers: h, text: Buffer.concat(chunks).toString("utf8") });
+        });
+        res.on("error", reject);
+      },
+    );
+    req.on("timeout", () => req.destroy(new Error(`No response within ${timeoutMs / 1000} seconds`)));
+    req.on("error", reject);
+    req.end(body);
+  });
+}

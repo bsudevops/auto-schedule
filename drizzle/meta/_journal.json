@@ -29,6 +29,13 @@
       "when": 1793780395989,
       "tag": "0003_platform",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793792971461,
+      "tag": "0004_mastodon_apps",
+      "breakpoints": true
     }
   ]
 }

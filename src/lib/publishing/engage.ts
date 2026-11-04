@@ -7,6 +7,12 @@ import { http } from "./http";
 import { call as metaCall } from "./meta";
 import { headers as liHeaders, linkedinError } from "./linkedin";
 import { tiktokError } from "./tiktok";
+import { threadsCall } from "./threads";
+import { gget } from "./google";
+import { pinterestError } from "./pinterest";
+import { blueskyFollowers, blueskyPostFigures } from "./bluesky";
+import { mastodonFollowers, mastodonPostFigures } from "./mastodon";
+import { devtoError } from "./devto";
 import { PublishError } from "./types";
 
 export type Ctx = { channel: { externalId: string; handle: string; meta: Record<string, unknown> }; accessToken: string };
@@ -252,4 +258,95 @@ const tiktok: EngageSource = {
   // TikTok's public API doesn't offer reading or replying to comments.
 };
 
-export const ENGAGE: Partial<Record<Platform, EngageSource>> = { facebook, instagram, linkedin, tiktok };
+/* ------------------------------ Threads ---------------------------- */
+
+type ThreadsInsight = { name: string; total_value?: { value?: number }; values?: { value?: number }[] };
+const insightValue = (rows: ThreadsInsight[], name: string) => {
+  const r = rows.find((x) => x.name === name);
+  return r?.total_value?.value ?? r?.values?.[0]?.value ?? null;
+};
+
+const threads: EngageSource = {
+  async followers({ channel, accessToken }) {
+    const r = await threadsCall<{ data: ThreadsInsight[] }>("GET", `${channel.externalId}/threads_insights`, accessToken, { metric: "followers_count" }, "Reading followers");
+    return insightValue(r.data, "followers_count");
+  },
+  async post({ accessToken }, id) {
+    const r = await threadsCall<{ data: ThreadsInsight[] }>("GET", `${id}/insights`, accessToken, { metric: "views,likes,replies,reposts,quotes" }, "Reading post figures");
+    return {
+      impressions: insightValue(r.data, "views"),
+      likes: insightValue(r.data, "likes"),
+      comments: insightValue(r.data, "replies"),
+      shares: (insightValue(r.data, "reposts") ?? 0) + (insightValue(r.data, "quotes") ?? 0),
+    };
+  },
+};
+
+/* ------------------------------ YouTube ---------------------------- */
+
+const YT = "https://www.googleapis.com/youtube/v3";
+type YtStats = { items?: { statistics?: Record<string, string | boolean | undefined> }[] };
+const ytNum = (v: unknown) => (typeof v === "string" && /^\d+$/.test(v) ? Number(v) : null);
+
+const youtube: EngageSource = {
+  async followers({ channel, accessToken }) {
+    const r = await gget<YtStats>(`${YT}/channels?part=statistics&id=${encodeURIComponent(channel.externalId)}`, accessToken, "Reading subscribers", "YouTube");
+    const st = r.items?.[0]?.statistics;
+    return st?.hiddenSubscriberCount ? null : ytNum(st?.subscriberCount);
+  },
+  async post({ accessToken }, id) {
+    const r = await gget<YtStats>(`${YT}/videos?part=statistics&id=${encodeURIComponent(id)}`, accessToken, "Reading video figures", "YouTube");
+    const st = r.items?.[0]?.statistics;
+    return { videoViews: ytNum(st?.viewCount), likes: ytNum(st?.likeCount), comments: ytNum(st?.commentCount) };
+  },
+};
+
+/* ----------------------------- Pinterest --------------------------- */
+
+const PIN = () => (process.env.PINTEREST_SANDBOX === "true" ? "https://api-sandbox.pinterest.com/v5" : "https://api.pinterest.com/v5");
+
+const pinterest: EngageSource = {
+  async followers({ accessToken }) {
+    const r = await http(`${PIN()}/user_account`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (r.status >= 400) throw pinterestError(r, "Reading followers");
+    return num((r.body as { follower_count?: unknown }).follower_count);
+  },
+  async post({ accessToken }, id) {
+    // Pin figures cover at most the last 90 days; we ask for the last 30.
+    const end = new Date();
+    const start = new Date(end.getTime() - 30 * 86_400_000);
+    const q = new URLSearchParams({ start_date: dayOf(start), end_date: dayOf(end), metric_types: "IMPRESSION,SAVE,PIN_CLICK,OUTBOUND_CLICK" });
+    const r = await http(`${PIN()}/pins/${encodeURIComponent(id)}/analytics?${q}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (r.status >= 400) throw pinterestError(r, "Reading pin figures");
+    const t = (r.body as { all?: { lifetime_metrics?: Record<string, number> } }).all?.lifetime_metrics ?? {};
+    return { impressions: t.IMPRESSION ?? null, saves: t.SAVE ?? null, clicks: (t.PIN_CLICK ?? 0) + (t.OUTBOUND_CLICK ?? 0) };
+  },
+};
+
+/* ------------------------- Bluesky and Mastodon -------------------- */
+
+const bluesky: EngageSource = {
+  followers: ({ channel }) => blueskyFollowers(String(channel.meta.did ?? channel.externalId)),
+  post: (_ctx, uri) => blueskyPostFigures(uri),
+};
+
+const mastodon: EngageSource = {
+  followers: ({ channel, accessToken }) => mastodonFollowers(String(channel.meta.instance), String(channel.meta.accountId), accessToken),
+  post: ({ channel, accessToken }, id) => mastodonPostFigures(String(channel.meta.instance), id, accessToken),
+};
+
+/* ------------------------------ DEV.to ----------------------------- */
+
+const devto: EngageSource = {
+  // DEV has no follower count endpoint, only a paged list, so we leave the figure out.
+  followers: async () => null,
+  async post({ accessToken }, id) {
+    const r = await http(`https://dev.to/api/articles/${encodeURIComponent(id)}`, { headers: { "api-key": accessToken, Accept: "application/vnd.forem.api-v1+json" } });
+    if (r.status >= 400) throw devtoError(r, "Reading article figures");
+    const a = r.body as { public_reactions_count?: number; comments_count?: number; page_views_count?: number };
+    return { likes: a.public_reactions_count ?? null, comments: a.comments_count ?? null, impressions: a.page_views_count ?? null };
+  },
+};
+
+// Google Business Profile post figures need a separate Performance API approval, so they aren't read yet.
+export const ENGAGE: Partial<Record<Platform, EngageSource>> = { facebook, instagram, linkedin, tiktok, threads, youtube, pinterest, bluesky, mastodon, devto };

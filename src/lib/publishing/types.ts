@@ -21,7 +21,13 @@ export class PublishError extends Error {
   }
 }
 
-export type Provider = "meta" | "linkedin" | "tiktok";
+export type Provider = "meta" | "linkedin" | "tiktok" | "threads" | "youtube" | "google_business" | "pinterest" | "bluesky" | "mastodon" | "devto";
+
+/** Extra input a connection needs before the platform's sign-in, such as a Mastodon server. Travels inside the encrypted state cookie. */
+export type ConnectContext = Record<string, string>;
+
+/** A field on a form-based connection (an app password or API key instead of signing in on the platform's site). */
+export type CredentialField = { name: string; label: string; type: "text" | "password" | "url"; placeholder?: string; help?: string };
 
 /** An account the platform returned after OAuth. Tokens stay server-side and are encrypted before storage. */
 export type ConnectedAccount = {
@@ -43,11 +49,24 @@ export interface ProviderAdapter {
   id: Provider;
   name: string;
   platforms: Platform[];
-  /** The environment variables this provider needs. */
+  /** The environment variables this provider needs. Empty when each customer brings their own credentials. */
   envVars: string[];
   configured(): boolean;
-  authorizeUrl(state: string, redirectUri: string): string;
-  exchangeCode(code: string, redirectUri: string): Promise<ConnectedAccount[]>;
+  /**
+   * "oauth": the user signs in on the platform's site (the default).
+   * "credentials": the user pastes an app password or API key into a form; no server setup needed.
+   */
+  connect?: "oauth" | "credentials";
+  /** OAuth providers that need input before redirecting (a Mastodon server). */
+  contextFields?: CredentialField[];
+  /** Form fields for credential providers. */
+  fields?: CredentialField[];
+  /** Checks typed context (a server address) and returns it normalised, or an error to show. */
+  prepareContext?(input: Record<string, string>, redirectUri: string): Promise<{ ok: true; ctx: ConnectContext } | { ok: false; error: string }>;
+  authorizeUrl(state: string, redirectUri: string, ctx?: ConnectContext): string | Promise<string>;
+  exchangeCode(code: string, redirectUri: string, ctx?: ConnectContext): Promise<ConnectedAccount[]>;
+  /** Credential providers: checks the pasted credentials with the platform and returns the account. */
+  connectWithCredentials?(input: Record<string, string>): Promise<ConnectedAccount[]>;
   /** Exchanges a refresh token for a new access token. Providers whose tokens don't refresh leave this out. */
   refresh?(refreshToken: string): Promise<TokenSet>;
 }

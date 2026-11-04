@@ -141,3 +141,21 @@ test("health check answers", async ({ request }) => {
   expect(r.status()).toBe(200);
   expect(await r.json()).toEqual({ ok: true, database: true, redis: true });
 });
+
+test("Bluesky, DEV and Mastodon connect with a short form", async ({ page }) => {
+  const base = await openWorkspace(page);
+  await go(page, `${base}/channels`);
+  const bsky = page.locator('[data-provider="bluesky"]');
+  await bsky.getByRole("button", { name: "Connect" }).click();
+  await bsky.getByLabel("Handle or email").fill("harbor.bsky.social");
+  await bsky.getByLabel("App password").fill("my main password");
+  await bsky.getByRole("button", { name: "Connect" }).last().click();
+  await expect(bsky.locator(".err")).toContainText("doesn't look like an app password");
+
+  const masto = page.locator('[data-provider="mastodon"]');
+  await masto.getByRole("button", { name: "Connect" }).click();
+  await masto.getByLabel("Your Mastodon server").fill("not a server");
+  await masto.getByRole("button", { name: "Continue to sign in" }).click();
+  await expect(page).toHaveURL(/connect=mastodon/);
+  await expect(page.locator('[data-provider="mastodon"] .err')).toContainText("Enter your server's address");
+});

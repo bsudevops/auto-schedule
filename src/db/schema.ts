@@ -22,6 +22,23 @@ const updatedAt = () =>
     .defaultNow()
     .$onUpdate(() => new Date());
 
+/**
+ * Mastodon has no central app registry: we register an app on each server the first time someone
+ * connects from it, and reuse it after that. The secret is encrypted.
+ */
+export const mastodonApps = pgTable(
+  "mastodon_apps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    instance: text("instance").notNull(),
+    redirectUri: text("redirect_uri").notNull(),
+    clientId: text("client_id").notNull(),
+    clientSecretEnc: text("client_secret_enc").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("mastodon_apps_instance_redirect_uq").on(t.instance, t.redirectUri)],
+);
+
 /* ------------------------------------------------------------------ */
 /* Auth tables (shape required by Better Auth)                         */
 /* ------------------------------------------------------------------ */
