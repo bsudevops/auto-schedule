@@ -7,6 +7,7 @@ import { can, canEditPost, type Member } from "./permissions";
 import { checkPost } from "./post-rules";
 import { nextOpenSlot, zonedToUtc } from "./queue-slots";
 import { enqueueTarget } from "./jobs";
+import { kickPublishing } from "./publishing/inline";
 import { logActivity, postTitle } from "./activity";
 
 export const postInput = z.object({
@@ -96,6 +97,7 @@ export async function savePost(ctx: Ctx, raw: unknown): Promise<Result> {
     if (orderedMedia.length) await tx.insert(postMedia).values(orderedMedia.map((m, i) => ({ postId: postId!, assetId: m.id, position: i })));
     return postId!;
   });
+  if (input.mode === "now") kickPublishing();
   const verb = status === "scheduled" ? "post.scheduled" : existing ? "post.updated" : "post.created";
   const what = status === "scheduled" ? (input.mode === "now" ? "sent" : input.mode === "queue" ? "queued" : "scheduled") : existing ? "updated" : "drafted";
   await logActivity({ workspaceId: wsId, actorId: ctx.member.userId, verb, summary: `${what} ${postTitle(input.caption)}`, href: `/w/${wsId}/posts/${id}` });
@@ -136,7 +138,7 @@ export async function retryFailed(ctx: Ctx, postId: string): Promise<{ ok: boole
     if (!claimed) return [];
     const rows = await tx
       .update(postTargets)
-      .set({ status: "pending", error: null, attempts: 0 })
+      .set({ status: "pending", error: null, attempts: 0, retryAt: null })
       .where(and(eq(postTargets.postId, p.id), eq(postTargets.status, "failed")))
       .returning({ id: postTargets.id });
     return rows.map((r) => r.id);
@@ -144,6 +146,7 @@ export async function retryFailed(ctx: Ctx, postId: string): Promise<{ ok: boole
   if (!ids.length) return { ok: false, error: "Nothing to retry." };
   // The worker also picks up pending targets on its next pass, so a Redis hiccup here only delays the retry.
   await Promise.all(ids.map((id) => enqueueTarget(id).catch(() => undefined)));
+  kickPublishing();
   await logActivity({ workspaceId: ctx.workspace.id, actorId: ctx.member.userId, verb: "post.retried", summary: `retried ${postTitle(p.caption)} on ${ids.length} channel${ids.length === 1 ? "" : "s"}`, href: `/w/${ctx.workspace.id}/posts/${p.id}` });
   return { ok: true, count: ids.length };
 }

@@ -14,6 +14,10 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 Caddy gets the HTTPS certificate automatically. Migrations run before the app and worker start. Set `TRUSTED_PROXIES=172.16.0.0/12` so client IPs are read from Caddy's headers. To update later: `git pull && docker compose -f docker-compose.prod.yml up -d --build`.
 
+## Option C: Vercel
+
+The whole product runs on Vercel with scheduled jobs in place of the worker. See [VERCEL.md](VERCEL.md).
+
 ## Option B: managed services
 
 Any host that runs a Docker image works (Render, Railway, Fly.io, AWS ECS, Google Cloud Run for the web app). Use the same image twice:
