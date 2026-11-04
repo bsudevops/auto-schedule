@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lt } from "drizzle-orm";
+import { ActivityList } from "@/components/ActivityList";
 import { Icon } from "@/components/Icon";
 import { EmptyState, PlatformBadge, PlatformStack, StatusPill } from "@/components/ui";
 import { db } from "@/db";
 import { channels, inboxThreads, postTargets, posts, user as userTable, type Platform } from "@/db/schema";
+import { recentActivity } from "@/lib/activity";
 import { fmtDay, fmtTime, fmtWeekdayTime, greeting } from "@/lib/format";
 import { can } from "@/lib/permissions";
 import { PLATFORMS } from "@/lib/platforms";
@@ -20,7 +22,7 @@ export default async function Overview({ params }: { params: Promise<{ workspace
   const ago30 = new Date(now.getTime() - 30 * 86_400_000);
   const ws = eq(posts.workspaceId, workspaceId);
 
-  const [upcoming, failed, recent, chans, [sched7], [pub30], [unread]] = await Promise.all([
+  const [upcoming, failed, recent, chans, [sched7], [pub30], [unread], activity] = await Promise.all([
     db.select({ id: posts.id, caption: posts.caption, at: posts.scheduledAt, status: posts.status, author: userTable.name })
       .from(posts).leftJoin(userTable, eq(userTable.id, posts.authorId))
       .where(and(ws, eq(posts.status, "scheduled"), gte(posts.scheduledAt, now))).orderBy(asc(posts.scheduledAt)).limit(6),
@@ -33,6 +35,7 @@ export default async function Overview({ params }: { params: Promise<{ workspace
     db.select({ n: count() }).from(posts).where(and(ws, eq(posts.status, "scheduled"), gte(posts.scheduledAt, now), lt(posts.scheduledAt, in7))),
     db.select({ n: count() }).from(posts).where(and(ws, eq(posts.status, "published"), gte(posts.publishedAt, ago30))),
     db.select({ n: count() }).from(inboxThreads).where(and(eq(inboxThreads.workspaceId, workspaceId), eq(inboxThreads.unread, true), isNull(inboxThreads.doneAt))),
+    recentActivity(workspaceId, { limit: 8 }),
   ]);
 
   const postIds = [...upcoming, ...recent].map((p) => p.id);
@@ -137,7 +140,13 @@ export default async function Overview({ params }: { params: Promise<{ workspace
                   <div className="grow"><div className="t">{PLATFORMS[c.platform].name}</div><div className="s">@{c.handle}</div></div>
                   <StatusPill status={c.status} />
                 </div>
-              )) : <EmptyState title="No channels yet" body="Connect Instagram, Facebook, LinkedIn or TikTok to get started." />}
+              )) : <EmptyState title="No channels yet" body="Connect a social account to get started." />}
+            </div>
+          </section>
+          <section className="card">
+            <div className="card-h"><h2>Team activity</h2><Link href={`${base}/activity`} className="btn ghost sm">See all</Link></div>
+            <div className="card-b" style={{ paddingTop: 6 }}>
+              {activity.length ? <ActivityList entries={activity} timeZone={tz} /> : <EmptyState title="No activity yet" body="Posts, channels and team changes show up here as they happen." />}
             </div>
           </section>
         </div>

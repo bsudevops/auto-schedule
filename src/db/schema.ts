@@ -467,6 +467,23 @@ export const ideas = pgTable(
   (t) => [index("ideas_ws_col_idx").on(t.workspaceId, t.column, t.position)],
 );
 
+/** What the team did in a workspace, newest first on the overview. Kept for 180 days. */
+export const activityLog = pgTable(
+  "activity_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    actorId: text("actor_id").references(() => user.id, { onDelete: "set null" }),
+    verb: text("verb").notNull(),
+    summary: text("summary").notNull(),
+    href: text("href"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("activity_ws_created_idx").on(t.workspaceId, t.createdAt)],
+);
+
 /** Named groups of hashtags people insert into captions with one click. */
 export const hashtagSets = pgTable(
   "hashtag_sets",

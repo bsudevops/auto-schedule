@@ -4,6 +4,7 @@ import { channels, mediaAssets, mediaVariants, postMedia, postTargets, posts, pu
 import { publicUrl } from "../media/storage";
 import { notify, workspaceManagers } from "../notify";
 import { emitEvent } from "../webhooks";
+import { logActivity, postTitle } from "../activity";
 import { PLATFORMS } from "../platforms";
 import { PUBLISHERS, RATE_LIMITS } from "./index";
 import { pickImageKey } from "./media";
@@ -151,6 +152,12 @@ export async function settlePost(postId: string) {
     channels: targets.map((t) => ({ channelId: t.channelId, platform: t.platform, status: t.status, url: t.url, error: t.error })),
   });
   const href = `/w/${post.workspaceId}/posts/${post.id}`;
+  const where = targets.map((t) => PLATFORMS[t.platform].name).filter((v, i, a) => a.indexOf(v) === i).join(", ");
+  await logActivity({
+    workspaceId: post.workspaceId, actorId: null, href,
+    verb: status === "published" ? "post.published" : "post.failed",
+    summary: status === "published" ? `${postTitle(post.caption)} was published on ${where}` : `${postTitle(post.caption)} failed on ${targets.filter((t) => t.status === "failed").map((t) => PLATFORMS[t.platform].name).join(", ")}`,
+  });
   if (status === "published") {
     if (post.authorId) await notify({ userIds: [post.authorId], workspaceId: post.workspaceId, type: "post_published", payload: { title: `Published: “${title}”`, href } });
     return;
@@ -214,4 +221,5 @@ export async function purgeOldRecords() {
   await db.execute(sql`delete from pending_connections where expires_at < now()`);
   await db.execute(sql`delete from notifications where read_at is not null and created_at < now() - interval '180 days'`);
   await db.execute(sql`delete from webhook_deliveries where created_at < now() - interval '30 days'`);
+  await db.execute(sql`delete from activity_log where created_at < now() - interval '180 days'`);
 }

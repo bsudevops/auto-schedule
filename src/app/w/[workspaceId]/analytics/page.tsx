@@ -3,6 +3,8 @@ import { EmptyState, PlatformBadge } from "@/components/ui";
 import { Icon } from "@/components/Icon";
 import { compact, RANGES, SORT_KEYS, sortChannels, type SortKey } from "@/lib/analytics-math";
 import { loadAnalytics, parseRange } from "@/lib/analytics";
+import { describeSlot, MIN_POSTS } from "@/lib/best-times";
+import { loadBestTimes } from "@/lib/best-times-load";
 import { requireWorkspace } from "@/lib/session";
 
 export const metadata = { title: "Analytics" };
@@ -17,7 +19,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const channelId = sp.channel && /^[0-9a-f-]{36}$/i.test(sp.channel) ? sp.channel : null;
   const sort: SortKey = (SORT_KEYS as readonly string[]).includes(sp.sort ?? "") ? (sp.sort as SortKey) : "reach";
   const dir: 1 | -1 = sp.dir === "asc" ? 1 : -1;
-  const data = await loadAnalytics(workspace, range, channelId);
+  const [data, best] = await Promise.all([loadAnalytics(workspace, range, channelId), loadBestTimes(workspace, channelId)]);
   const { summary, selected } = data;
 
   const href = (o: Record<string, string | null>) => {
@@ -181,6 +183,35 @@ export default async function Page({ params, searchParams }: { params: Promise<{
           </div>
         </div>
       </div>
+
+      <section className="card" style={{ marginTop: 16 }} aria-labelledby="best-times">
+        <div className="card-h"><h2 id="best-times">Best times to post</h2><span className="muted" style={{ fontSize: 12.5 }}>{label}, last 90 days, {workspace.timezone.replace(/_/g, " ")}</span></div>
+        <div className="card-b">
+          {best.times.length ? (
+            <>
+              <ol className="best-times">
+                {best.times.map((t, i) => (
+                  <li key={`${t.weekday}-${t.hour}`}>
+                    <span className="rank num">{i + 1}</span>
+                    <div className="grow">
+                      <b>{describeSlot(t)}</b>
+                      <div className="muted" style={{ fontSize: 12.5 }}>
+                        {t.lift !== null && t.lift > 0 ? `${Math.round(t.lift * 100)}% more engagement than your average` : "About your average engagement"} · {t.posts} posts
+                      </div>
+                    </div>
+                    <span className="num">{Math.round(t.avg).toLocaleString("en-US")} <span className="muted" style={{ fontSize: 12 }}>avg. engagements</span></span>
+                  </li>
+                ))}
+              </ol>
+              <p className="muted" style={{ fontSize: 12.5, margin: "12px 0 0" }}>
+                Worked out from your own {best.sample} published posts with results. Add these times to a queue from the <Link href={`/w/${workspaceId}/calendar?view=queues`}>Queues</Link> view.
+              </p>
+            </>
+          ) : (
+            <div className="empty">Not enough results yet. Best times appear once about {MIN_POSTS} published posts{selected ? " on this channel" : ""} have figures, with at least two at the same hour.</div>
+          )}
+        </div>
+      </section>
     </>
   );
 }

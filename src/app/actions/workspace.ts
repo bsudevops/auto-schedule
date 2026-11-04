@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { invitations, orgMembers, organizations, user as userTable, workspaceMembers, workspaces, type WorkspaceRole } from "@/db/schema";
 import { BRAND } from "@/lib/brand";
 import { sha256 } from "@/lib/crypto";
+import { logActivity } from "@/lib/activity";
 import { sendEmail } from "@/lib/email";
 import { canManageMember, ROLE_LABELS, ROLE_RANK } from "@/lib/permissions";
 import { requireUser, requireWorkspace } from "@/lib/session";
@@ -82,9 +83,15 @@ export async function inviteMember(workspaceId: string, _: FormState, form: Form
     subject: `${user.name} invited you to ${workspace.name} on ${BRAND.name}`,
     text: `${user.name} invited you to join ${workspace.name} as ${ROLE_LABELS[role]}.\n\nAccept the invitation: ${link}\n\nThe link works for 7 days.`,
   });
+  await logActivity({ workspaceId, actorId: user.id, verb: "member.invited", summary: `invited ${email} as ${ROLE_LABELS[role]}`, href: `/w/${workspaceId}/settings/members` });
   revalidatePath(`/w/${workspaceId}/settings/members`);
   // Show the link only when email isn't configured, so the inviter can share it another way.
   return { ok: `Invitation sent to ${email}.`, link: process.env.SMTP_HOST ? undefined : link };
+}
+
+async function nameOf(userId: string) {
+  const [u] = await db.select({ name: userTable.name }).from(userTable).where(eq(userTable.id, userId));
+  return u?.name ?? "a former member";
 }
 
 export async function changeMemberRole(workspaceId: string, targetUserId: string, role: WorkspaceRole) {
@@ -94,6 +101,7 @@ export async function changeMemberRole(workspaceId: string, targetUserId: string
     return { error: "You can't change this person's role." };
   }
   await db.update(workspaceMembers).set({ role }).where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, targetUserId)));
+  await logActivity({ workspaceId, actorId: member.userId, verb: "member.role", summary: `made ${await nameOf(targetUserId)} ${ROLE_LABELS[role]}`, href: `/w/${workspaceId}/settings/members` });
   revalidatePath(`/w/${workspaceId}/settings/members`);
   return { ok: "Role updated." };
 }
@@ -105,6 +113,7 @@ export async function removeMember(workspaceId: string, targetUserId: string) {
     return { error: "You can't remove this person." };
   }
   await db.delete(workspaceMembers).where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, targetUserId)));
+  await logActivity({ workspaceId, actorId: member.userId, verb: "member.removed", summary: `removed ${await nameOf(targetUserId)} from the workspace` });
   revalidatePath(`/w/${workspaceId}/settings/members`);
   return { ok: "Removed." };
 }

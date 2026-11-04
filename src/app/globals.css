@@ -416,3 +416,18 @@ table.tbl{width:100%;border-collapse:collapse}
 .tag-set .mi span{display:flex;flex-direction:column;min-width:0}
 .tag-set small{color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tag-save{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:8px 6px 4px;border-top:1px solid var(--line-2)}
+
+/* Analytics: best times */
+.best-times{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.best-times li{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line-2)}
+.best-times li:first-child{border-top:0;padding-top:0}
+.best-times .rank{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--sky-50);color:var(--sky-deep);font-weight:600;font-size:13px;flex:none}
+
+/* Team activity */
+.activity{list-style:none;margin:0;padding:0}
+.activity li{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--line-2);align-items:flex-start}
+.activity li:first-child{border-top:0}
+.activity .who{width:28px;height:28px;border-radius:50%;flex:none;display:grid;place-items:center;background:var(--sky-50);color:var(--sky-deep);font-size:12px;font-weight:600;overflow:hidden}
+.activity .what{flex:1;min-width:0;font-size:13.5px;line-height:1.45}
+.activity .what a{color:inherit}
+.activity time{display:block;color:var(--muted);font-size:12px}

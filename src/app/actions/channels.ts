@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { channels, pendingConnections } from "@/db/schema";
+import { logActivity } from "@/lib/activity";
 import { accountKey, loadPending, saveChannels, savePending } from "@/lib/channels";
+import { PLATFORMS } from "@/lib/platforms";
 import { PROVIDERS, PublishError, isProvider } from "@/lib/publishing";
 import { redis } from "@/lib/redis";
 import { requireWorkspace } from "@/lib/session";
@@ -50,7 +52,11 @@ export async function finishConnectAction(workspaceId: string, pendingId: string
   if (!pending) redirect(`/w/${workspaceId}/channels?error=connect_expired`);
   const picked = new Set(formData.getAll("account").map(String));
   const chosen = pending.accounts.filter((a) => picked.has(accountKey(a)));
-  if (chosen.length) await saveChannels(workspaceId, user.id, chosen);
+  if (chosen.length) {
+    await saveChannels(workspaceId, user.id, chosen);
+    const names = chosen.map((a) => `${PLATFORMS[a.platform].name} (${a.displayName})`);
+    await logActivity({ workspaceId, actorId: user.id, verb: "channel.connected", summary: `connected ${names.slice(0, 3).join(", ")}${names.length > 3 ? ` and ${names.length - 3} more` : ""}`, href: `/w/${workspaceId}/channels` });
+  }
   await db.delete(pendingConnections).where(eq(pendingConnections.id, pending.id));
   revalidatePath(`/w/${workspaceId}`, "layout");
   redirect(`/w/${workspaceId}/channels?connected=${chosen.length}`);
@@ -64,19 +70,23 @@ export async function cancelConnectAction(workspaceId: string, pendingId: string
 
 /** Stops publishing to a channel and deletes its tokens. Its post history stays. */
 export async function disconnectChannelAction(workspaceId: string, channelId: string) {
-  await requireWorkspace(workspaceId, "manage_channels");
-  await db
+  const { user } = await requireWorkspace(workspaceId, "manage_channels");
+  const [ch] = await db
     .update(channels)
     .set({ status: "disconnected", accessTokenEnc: null, refreshTokenEnc: null, tokenExpiresAt: null, lastError: null })
-    .where(and(eq(channels.id, channelId), eq(channels.workspaceId, workspaceId)));
+    .where(and(eq(channels.id, channelId), eq(channels.workspaceId, workspaceId)))
+    .returning({ platform: channels.platform, name: channels.displayName });
+  if (ch) await logActivity({ workspaceId, actorId: user.id, verb: "channel.disconnected", summary: `disconnected ${PLATFORMS[ch.platform].name} (${ch.name})`, href: `/w/${workspaceId}/channels` });
   revalidatePath(`/w/${workspaceId}`, "layout");
   return { ok: true };
 }
 
 /** Removes a disconnected channel for good, including its post history on that channel. */
 export async function removeChannelAction(workspaceId: string, channelId: string) {
-  await requireWorkspace(workspaceId, "manage_channels");
-  await db.delete(channels).where(and(eq(channels.id, channelId), eq(channels.workspaceId, workspaceId), eq(channels.status, "disconnected")));
+  const { user } = await requireWorkspace(workspaceId, "manage_channels");
+  const [ch] = await db.delete(channels).where(and(eq(channels.id, channelId), eq(channels.workspaceId, workspaceId), eq(channels.status, "disconnected")))
+    .returning({ platform: channels.platform, name: channels.displayName });
+  if (ch) await logActivity({ workspaceId, actorId: user.id, verb: "channel.removed", summary: `removed ${PLATFORMS[ch.platform].name} (${ch.name}) and its post history` });
   revalidatePath(`/w/${workspaceId}`, "layout");
   return { ok: true };
 }

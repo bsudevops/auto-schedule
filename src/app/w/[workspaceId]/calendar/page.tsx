@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { and, asc, eq, gte, inArray, isNull, lt, or } from "drizzle-orm";
+import { and, asc, count, eq, gt, gte, inArray, isNull, lt, or } from "drizzle-orm";
 import { Icon } from "@/components/Icon";
 import { EmptyState, PlatformStack, StatusPill } from "@/components/ui";
 import { db } from "@/db";
 import { channels, postTargets, posts, queueChannels, queueSlots, queues, type Platform } from "@/db/schema";
 import { addDays, addMonths, localParts, monthGrid, parseLocal, startOfWeek, type LocalDate } from "@/lib/calendar";
+import { describeSlot } from "@/lib/best-times";
+import { loadBestTimes } from "@/lib/best-times-load";
 import { can } from "@/lib/permissions";
 import { zonedToUtc } from "@/lib/queue-slots";
 import { requireWorkspace } from "@/lib/session";
@@ -75,9 +77,11 @@ export default async function Page({ params, searchParams }: { params: Promise<{
 
       {view === "queues" ? (
         <QueueManager workspaceId={workspaceId} canEdit={can(member, "publish")}
+          bestTimes={(await loadBestTimes(workspace)).times.map((b) => ({ weekday: b.weekday, hour: b.hour, lift: b.lift, label: describeSlot(b) }))}
           channels={(await db.select({ id: channels.id, platform: channels.platform, handle: channels.handle }).from(channels).where(eq(channels.workspaceId, workspaceId)))}
           queues={await Promise.all(qs.map(async (q) => ({
             id: q.id, name: q.name,
+            upcoming: (await db.select({ n: count() }).from(posts).where(and(eq(posts.queueId, q.id), eq(posts.status, "scheduled"), gt(posts.scheduledAt, new Date()))))[0]?.n ?? 0,
             slots: slots.filter((s) => s.queueId === q.id).sort((a, b) => a.weekday - b.weekday || a.minuteOfDay - b.minuteOfDay).map((s) => ({ id: s.id, weekday: s.weekday, minuteOfDay: s.minuteOfDay })),
             platforms: (await db.select({ p: channels.platform }).from(queueChannels).innerJoin(channels, eq(channels.id, queueChannels.channelId)).where(eq(queueChannels.queueId, q.id))).map((x) => x.p),
           })))} />

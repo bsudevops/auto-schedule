@@ -174,3 +174,18 @@ test("hashtag sets save from a caption and insert into another", async ({ page }
   await page.locator(".tag-set .mi", { hasText: "Autumn" }).click();
   await expect(caption).toHaveValue("Weekend hours\n\n#coffee #pumpkin");
 });
+
+test("queues shuffle, best times show, and the team sees it in activity", async ({ page }) => {
+  const base = await openWorkspace(page);
+  await go(page, `${base}/calendar?view=queues`);
+  await page.getByRole("button", { name: "Shuffle order" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Shuffled 3 posts" })).toBeVisible();
+
+  await go(page, `${base}/analytics`);
+  await expect(page.locator(".best-times li").first()).toBeVisible();
+
+  await go(page, base);
+  await expect(page.locator(".activity").first()).toContainText("shuffled 3 posts in “Weekday mornings”");
+  await page.getByRole("link", { name: "See all" }).last().click();
+  await expect(page.getByRole("heading", { name: "Team activity" })).toBeVisible();
+});
