@@ -166,7 +166,7 @@ test("hashtag sets save from a caption and insert into another", async ({ page }
   const caption = page.locator("#caption");
   await caption.fill("Autumn menu is here #coffee #pumpkin");
   await page.locator("summary[aria-label=Hashtags]").click();
-  await page.getByPlaceholder("Set name, like Coffee").fill("Autumn");
+  await page.getByPlaceholder("Set name, like Product launch").fill("Autumn");
   await page.getByRole("button", { name: "Save set" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Hashtag set saved." })).toBeVisible();
 

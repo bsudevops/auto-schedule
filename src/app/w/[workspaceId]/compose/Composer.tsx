@@ -42,7 +42,7 @@ export type ComposerProps = {
   };
 };
 
-const EMOJI = ["☕", "🎉", "🔥", "✨", "❤️", "👏", "📣", "🙌", "😊", "👉"];
+const EMOJI = ["💡", "🎉", "🔥", "✨", "❤️", "👏", "📣", "🙌", "😊", "👉"];
 
 export function Composer(props: ComposerProps) {
   const { workspaceId, timezone, canPublish, channels, queues, initial } = props;
@@ -193,7 +193,7 @@ export function Composer(props: ComposerProps) {
 
               <section className="card"><div className="card-b stack">
                 <label className="field"><span>Tags <span className="muted" style={{ fontWeight: 400 }}>(comma-separated, for your team only)</span></span>
-                  <input className="input" id="tags" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="fall-campaign, cold-brew" /></label>
+                  <input className="input" id="tags" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="launch, spring-campaign" /></label>
                 <label className="field"><span>First comment <span className="muted" style={{ fontWeight: 400 }}>(posted as a reply where the platform allows it)</span></span>
                   <input className="input" id="first-comment" value={firstComment} onChange={(e) => setFirstComment(e.target.value)} maxLength={2200} placeholder="Add hashtags or a link as the first comment" /></label>
               </div></section>
