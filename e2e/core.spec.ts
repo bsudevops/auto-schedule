@@ -90,7 +90,7 @@ test("API keys work, respect scopes and stop working when revoked", async ({ pag
   await page.getByLabel("Key name").fill("E2E");
   await page.getByRole("button", { name: "Create key" }).click();
   const key = (await page.locator("[data-secret]").textContent())!.trim();
-  expect(key).toMatch(/^yb_live_/);
+  expect(key).toMatch(/^bsu_live_/);
 
   const auth = { Authorization: `Bearer ${key}` };
   const me = await request.get("/api/v1/me", { headers: auth });
@@ -106,7 +106,7 @@ test("API keys work, respect scopes and stop working when revoked", async ({ pag
   expect(post.status).toBe("draft");
   expect((await request.delete(`/api/v1/posts/${post.id}`, { headers: auth })).status()).toBe(204);
 
-  expect((await request.get("/api/v1/posts", { headers: { Authorization: "Bearer yb_live_nope" } })).status()).toBe(401);
+  expect((await request.get("/api/v1/posts", { headers: { Authorization: "Bearer bsu_live_nope" } })).status()).toBe(401);
 
   await page.getByRole("button", { name: "Done" }).click();
   page.once("dialog", (d) => d.accept());

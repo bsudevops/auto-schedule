@@ -23,7 +23,7 @@ describe("secret encryption", () => {
 describe("api keys", () => {
   it("stores only a hash that matches the key", () => {
     const k = newApiKey();
-    expect(k.key.startsWith("yb_live_")).toBe(true);
+    expect(k.key.startsWith("bsu_live_")).toBe(true);
     expect(k.hash).toBe(sha256(k.key));
     expect(k.hash).not.toContain(k.key);
   });

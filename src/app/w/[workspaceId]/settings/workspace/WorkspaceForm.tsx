@@ -17,7 +17,7 @@ export function WorkspaceForm({ workspace, canEdit }: { workspace: Ws; canEdit: 
       <div className="set-row">
         <div><h3>Post defaults</h3><p>Prefilled on every new post in this workspace.</p></div>
         <div className="stack" style={{ maxWidth: 520 }}>
-          <label className="field"><span>Default hashtags</span><input className="input" name="defaultHashtags" id="defaultHashtags" defaultValue={workspace.defaultHashtags} maxLength={500} disabled={!canEdit} placeholder="#YourBrand #Coffee" /></label>
+          <label className="field"><span>Default hashtags</span><input className="input" name="defaultHashtags" id="defaultHashtags" defaultValue={workspace.defaultHashtags} maxLength={500} disabled={!canEdit} placeholder="#BSUScheduler #Coffee" /></label>
           <label className="field"><span>Default first comment</span><input className="input" name="defaultFirstComment" id="defaultFirstComment" defaultValue={workspace.defaultFirstComment} maxLength={2000} disabled={!canEdit} /></label>
         </div>
       </div>

@@ -7,7 +7,12 @@ RUN npm ci
 FROM deps AS build
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+# `next build` loads server modules, which check their settings. These placeholders exist only in this
+# build stage: nothing connects to them, and the real values are passed to the running containers.
+RUN DATABASE_URL=postgres://build@127.0.0.1:1/build \
+    BETTER_AUTH_SECRET=build-stage-placeholder-not-used-at-runtime \
+    BETTER_AUTH_URL=http://localhost:3000 APP_URL=http://localhost:3000 \
+    npm run build
 
 FROM node:22-bookworm-slim
 WORKDIR /app

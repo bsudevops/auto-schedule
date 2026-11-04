@@ -3,7 +3,7 @@
 Owners and managers create keys in **Settings → API & webhooks**. A key belongs to one workspace and acts with the current role of the person who created it, so it can never do more than they can. If that person leaves the workspace, the key stops working. Only a SHA-256 fingerprint of each key is stored.
 
 ```
-Authorization: Bearer yb_live_…
+Authorization: Bearer bsu_live_…
 ```
 
 Responses are JSON. Errors look like `{ "error": "What went wrong, in plain words." }` with a 4xx status. Each key can make 120 requests a minute (`API_RATE_LIMIT_PER_MINUTE`); over that you get `429` with `Retry-After`.
