@@ -30,6 +30,8 @@ Use managed PostgreSQL and Redis, and Cloudflare R2 or AWS S3 for media.
 
 ## Checklist before going live
 
+- **Who can sign up:** set `SIGNUP_MODE=invite-only` to close the public sign-up page. People then join only through an invitation sent from inside the app (the invitation must be for the email they sign up with), and addresses in `ADMIN_EMAILS` can always sign up. Create the first admin without any email by running `npm run admin:create -- --email you@company.com --name "Your Name"` on the server (with Docker: `docker compose -f docker-compose.prod.yml exec web npm run admin:create -- --email … --name …`): it asks for a password (hidden), confirms the account, and signing in leads to the company setup screen. The same command resets a lost password.
+
 - `APP_URL` and `BETTER_AUTH_URL`: your `https://` address
 - `BETTER_AUTH_SECRET`: 32+ random characters. `TOKEN_ENCRYPTION_KEY`: 32 random bytes, base64 (`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`). Keep a copy of the encryption key somewhere safe: without it, stored channel tokens can't be read and every channel must be reconnected.
 - `SMTP_*` and `EMAIL_FROM`: sign-up confirmation, invitations and password resets need real email

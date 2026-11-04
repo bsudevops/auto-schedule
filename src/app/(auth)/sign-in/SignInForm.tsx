@@ -5,7 +5,7 @@ import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { GoogleButton } from "../GoogleButton";
 
-export function SignInForm({ google }: { google: boolean }) {
+export function SignInForm({ google, signupOpen = true }: { google: boolean; signupOpen?: boolean }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -47,7 +47,7 @@ export function SignInForm({ google }: { google: boolean }) {
       </div>
       {error && <p className="err" role="alert">{error}</p>}
       <button className="btn primary" style={{ justifyContent: "center" }} type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
-      <p className="muted" style={{ fontSize: 13, textAlign: "center" }}>New here? <Link href="/sign-up">Create an account</Link></p>
+      {signupOpen ? <p className="muted" style={{ fontSize: 13, textAlign: "center" }}>New here? <Link href="/sign-up">Create an account</Link></p> : <p className="muted" style={{ fontSize: 13, textAlign: "center" }}>Accounts are created by invitation.</p>}
     </form>
   );
 }

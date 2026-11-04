@@ -23,6 +23,7 @@ COPY --from=build --chown=app /app/node_modules ./node_modules
 COPY --from=build --chown=app /app/.next ./.next
 COPY --from=build --chown=app /app/src ./src
 COPY --from=build --chown=app /app/drizzle ./drizzle
+COPY --from=build --chown=app /app/scripts ./scripts
 COPY --from=build --chown=app /app/tsconfig.json /app/next.config.ts ./
 USER app
 EXPOSE 3000
