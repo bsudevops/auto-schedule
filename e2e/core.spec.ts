@@ -329,3 +329,36 @@ test("a post deleted on the platform shows as a red, struck-through entry and on
   await page.reload();
   await expect(page.locator(".ov-alert", { hasText: "is no longer on Facebook" })).toHaveCount(0);
 });
+
+test("Gemini writes a caption, a YouTube title and hashtags from the post's video", async ({ page, request }) => {
+  const base = await openWorkspace(page);
+  await go(page, `${base}/compose`);
+  for (const name of ["Instagram", "Facebook", "LinkedIn"]) {
+    const chip = page.locator("button.chip", { hasText: name }).first();
+    if ((await chip.getAttribute("class"))?.includes("on")) await chip.click();
+  }
+  const yt = page.locator("button.chip", { hasText: "YouTube" }).first();
+  if (!(await yt.getAttribute("class"))?.includes("on")) await yt.click();
+  await page.getByRole("button", { name: "Add media" }).first().click();
+  await page.getByRole("dialog", { name: "Add media" }).locator('input[type="file"]').setInputFiles("e2e/fixtures/clip.webm");
+  await expect(page.getByRole("dialog", { name: "Add media" })).toBeHidden({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: "Writing help" }).click();
+  const ai = page.getByRole("region", { name: "Writing help" });
+  await expect(ai.getByText("Gemini looks at your video")).toBeVisible();
+  await ai.getByLabel(/Notes for the AI/).fill("cold brew launch");
+  await ai.getByRole("button", { name: "Write from media" }).click();
+  await expect(ai.getByText("Fresh from the roaster")).toBeVisible({ timeout: 30_000 });
+
+  await ai.getByRole("button", { name: "Use this" }).first().click();
+  await expect(page.locator("textarea").first()).toHaveValue(/Fresh from the roaster/);
+  await ai.getByRole("button", { name: "Use as title" }).click();
+  await expect(page.getByRole("region", { name: /YouTube settings/ }).getByLabel(/^Title/)).toHaveValue("How we make cold brew, start to finish");
+  await ai.getByRole("button", { name: "Add to caption" }).click();
+  await expect(page.locator("textarea").first()).toHaveValue(/#coldbrew/);
+
+  // The video went to Gemini as an uploaded file, with the team's notes.
+  const last = await (await request.get("http://localhost:3999/__last", { headers: { "x-goog-api-key": "e2e-gemini-key" } })).json();
+  expect(last.kinds[0]).toBe("file_data");
+  expect(last.text).toContain("cold brew launch");
+});

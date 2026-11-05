@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState, useTransition } from "react";
-import { aiWriteAction, deleteHashtagSetAction, importStockAction, saveHashtagSetAction, searchStockAction } from "@/app/actions/composer";
+import { aiFromMediaAction, aiWriteAction, deleteHashtagSetAction, importStockAction, saveHashtagSetAction, searchStockAction } from "@/app/actions/composer";
 import { Icon } from "@/components/Icon";
 import { tagsIn } from "@/lib/hashtags";
 import type { StockPhoto } from "@/lib/stock";
@@ -17,8 +17,10 @@ const TASKS = [
 ] as const;
 
 /** Writing help: suggestions the person reads and chooses; nothing changes until they pick one. */
-export function AiPanel({ workspaceId, text, channelIds, onUse, onClose }: {
+export function AiPanel({ workspaceId, text, channelIds, onUse, onClose, media }: {
   workspaceId: string; text: string; channelIds: string[]; onUse: (value: string, how: "replace" | "tags") => void; onClose: () => void;
+  /** Present when Gemini is set up: write from the post's media. */
+  media?: { ids: string[]; kinds: ("image" | "video")[]; youtube: boolean; onUseTitle: (title: string) => void };
 }) {
   const [task, setTask] = useState<(typeof TASKS)[number]["id"] | null>(null);
   const [results, setResults] = useState<string[]>([]);
@@ -42,6 +44,8 @@ export function AiPanel({ workspaceId, text, channelIds, onUse, onClose }: {
         <b className="row" style={{ gap: 6, fontSize: 13 }}><Icon name="spark" size={15} /> Writing help</b>
         <button type="button" className="icon-btn" aria-label="Close writing help" onClick={onClose}><Icon name="x" size={15} /></button>
       </div>
+      {media && <MediaWriter workspaceId={workspaceId} channelIds={channelIds} media={media} onUse={onUse} />}
+      {media && <div className="label-plain">Or work from your text</div>}
       <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
         {TASKS.map((t) => (
           <button type="button" key={t.id} className={`btn sm${task === t.id ? " primary" : ""}`} disabled={pending || !text.trim()} title={"hint" in t ? t.hint : undefined} onClick={() => run(t.id)}>{t.label}</button>
@@ -62,7 +66,82 @@ export function AiPanel({ workspaceId, text, channelIds, onUse, onClose }: {
           ))}
         </ol>
       )}
-      <p className="muted" style={{ fontSize: 11.5, margin: 0 }}>Suggestions come from Claude. Check facts before you post.</p>
+      <p className="muted" style={{ fontSize: 11.5, margin: 0 }}>Suggestions come from AI. Check facts before you post.</p>
+    </div>
+  );
+}
+
+/** Gemini looks at the attached image, carousel or video and suggests captions, YouTube titles and hashtags. */
+function MediaWriter({ workspaceId, channelIds, media, onUse }: {
+  workspaceId: string; channelIds: string[];
+  media: { ids: string[]; kinds: ("image" | "video")[]; youtube: boolean; onUseTitle: (title: string) => void };
+  onUse: (value: string, how: "replace" | "tags") => void;
+}) {
+  const [notes, setNotes] = useState("");
+  const [result, setResult] = useState<{ captions: string[]; titles: string[]; hashtags: string[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [used, setUsed] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const hasVideo = media.kinds.includes("video");
+  const what = !media.ids.length ? null : hasVideo ? "your video" : media.ids.length > 1 ? `your ${media.ids.length} images` : "your image";
+
+  function run() {
+    setError(null);
+    setResult(null);
+    setUsed(null);
+    start(async () => {
+      const r = await aiFromMediaAction(workspaceId, { mediaIds: media.ids, channelIds, notes });
+      if ("error" in r) setError(r.error);
+      else setResult(r);
+    });
+  }
+
+  return (
+    <div className="ai-media">
+      <div className="ai-media-head">
+        <b>Write from media</b>
+        <small className="muted">{what ? `Gemini looks at ${what} and writes captions${media.youtube ? ", YouTube titles" : ""} and hashtags.` : "Add an image, a carousel or a video above, then let Gemini write about it."}</small>
+      </div>
+      <label className="field"><span>Notes for the AI <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></span>
+        <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} placeholder="Like: new cold brew launch, friendly tone, mention our Pier Street shop" /></label>
+      <button type="button" className="btn primary sm" disabled={pending || !media.ids.length} onClick={run} style={{ alignSelf: "flex-start" }}>
+        <Icon name="spark" size={14} /> {result ? "Write again" : "Write from media"}
+      </button>
+      {pending && <p className="muted" role="status" style={{ fontSize: 12.5, margin: 0 }}>{hasVideo ? "Watching the video and writing… this can take a minute." : "Looking at the media and writing…"}</p>}
+      {error && <p className="err" role="alert" style={{ margin: 0 }}>{error}</p>}
+      {used && <p className="muted" role="status" style={{ fontSize: 12.5, margin: 0 }}>{used}</p>}
+      {result && (
+        <div className="stack" style={{ gap: 12 }}>
+          {result.captions.length > 0 && (
+            <div className="stack" style={{ gap: 6 }}>
+              <div className="label-plain">Captions</div>
+              <ol className="ai-results">
+                {result.captions.map((c) => (
+                  <li key={c}><p>{c}</p><button type="button" className="btn sm" onClick={() => { onUse(c, "replace"); setUsed("Caption added. Edit it as you like."); }}>Use this</button></li>
+                ))}
+              </ol>
+            </div>
+          )}
+          {media.youtube && result.titles.length > 0 && (
+            <div className="stack" style={{ gap: 6 }}>
+              <div className="label-plain">YouTube titles</div>
+              <ol className="ai-results">
+                {result.titles.map((t) => (
+                  <li key={t}><p>{t}</p><button type="button" className="btn sm" onClick={() => { media.onUseTitle(t); setUsed("YouTube title set."); }}>Use as title</button></li>
+                ))}
+              </ol>
+            </div>
+          )}
+          {result.hashtags.length > 0 && (
+            <div className="stack" style={{ gap: 6 }}>
+              <div className="label-plain">Hashtags</div>
+              <ol className="ai-results">
+                <li><p>{result.hashtags.join(" ")}</p><button type="button" className="btn sm" onClick={() => { onUse(result.hashtags.join(" "), "tags"); setUsed("Hashtags added to the caption."); }}>Add to caption</button></li>
+              </ol>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

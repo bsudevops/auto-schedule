@@ -8,7 +8,7 @@ import { defineConfig, devices } from "@playwright/test";
 const PORT = Number(process.env.E2E_PORT ?? 3100);
 // E2E_CRON=1 runs the Vercel way: no worker, publishing is done by the app itself and the cron routes.
 const cron = process.env.E2E_CRON === "1";
-const env = { PUBLISH_DRY_RUN: "true", SCHEDULER_INTERVAL_MS: "2000", APP_URL: `http://localhost:${PORT}`, BETTER_AUTH_URL: `http://localhost:${PORT}`, ...(cron ? { JOBS_MODE: "inline", CRON_SECRET: "e2e-cron-secret" } : {}) };
+const env = { GEMINI_API_KEY: "e2e-gemini-key", GEMINI_BASE_URL: "http://localhost:3999", PUBLISH_DRY_RUN: "true", SCHEDULER_INTERVAL_MS: "2000", APP_URL: `http://localhost:${PORT}`, BETTER_AUTH_URL: `http://localhost:${PORT}`, ...(cron ? { JOBS_MODE: "inline", CRON_SECRET: "e2e-cron-secret" } : {}) };
 
 export default defineConfig({
   testDir: "e2e",
@@ -31,6 +31,8 @@ export default defineConfig({
   ],
   webServer: [
     { command: `npx next start -p ${PORT}`, url: `http://localhost:${PORT}/api/health`, timeout: 60_000, reuseExistingServer: !process.env.CI, env },
+    // Stands in for the Gemini API, so "Write from media" can be tested without a key.
+    { command: "node e2e/mock-gemini.mjs", port: 3999, timeout: 15_000, reuseExistingServer: true },
     // Serves uploaded files, so tests can play videos and read their frames.
     { command: "npm run media", port: 3001, timeout: 30_000, reuseExistingServer: true },
     ...(cron ? [] : [{ command: "npm run worker", wait: { stdout: /Worker ready/ }, timeout: 60_000, reuseExistingServer: false, env }]),
