@@ -8,7 +8,7 @@ import { activityLog, user } from "@/db/schema";
  */
 export type Verb =
   | "post.created" | "post.scheduled" | "post.updated" | "post.rescheduled" | "post.deleted" | "post.retried"
-  | "post.published" | "post.failed"
+  | "post.published" | "post.failed" | "post.removed"
   | "queue.created" | "queue.deleted" | "queue.shuffled"
   | "channel.connected" | "channel.disconnected" | "channel.removed"
   | "member.invited" | "member.role" | "member.removed";
@@ -27,12 +27,12 @@ export const postTitle = (caption: string) => {
   return t ? `“${t.length > 60 ? `${t.slice(0, 59)}…` : t}”` : "an untitled post";
 };
 
-export async function recentActivity(workspaceId: string, opts: { limit?: number; before?: Date } = {}) {
+export async function recentActivity(workspaceId: string, opts: { limit?: number; before?: Date; href?: string } = {}) {
   return db
     .select({ id: activityLog.id, verb: activityLog.verb, summary: activityLog.summary, href: activityLog.href, at: activityLog.createdAt, actor: user.name, actorImage: user.image })
     .from(activityLog)
     .leftJoin(user, eq(user.id, activityLog.actorId))
-    .where(and(eq(activityLog.workspaceId, workspaceId), opts.before ? lt(activityLog.createdAt, opts.before) : undefined))
+    .where(and(eq(activityLog.workspaceId, workspaceId), opts.before ? lt(activityLog.createdAt, opts.before) : undefined, opts.href ? eq(activityLog.href, opts.href) : undefined))
     .orderBy(desc(activityLog.createdAt))
     .limit(opts.limit ?? 20);
 }

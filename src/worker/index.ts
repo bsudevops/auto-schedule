@@ -60,6 +60,7 @@ const maintenance = new Worker(
     }
     if (job.name === "sync-inbox") return syncAll("inbox");
     if (job.name === "sync-insights") return syncAll("insights");
+    if (job.name === "sync-removals") return syncAll("removals");
     throw new UnrecoverableError(`Unknown maintenance job ${job.name}`);
   },
   { connection, concurrency: 1 },
@@ -70,6 +71,8 @@ async function start() {
   await maintenanceQueue.upsertJobScheduler("tick", { every: Number(process.env.SCHEDULER_INTERVAL_MS ?? 15_000) }, { name: "tick", opts: { removeOnComplete: true, removeOnFail: 50 } });
   await maintenanceQueue.upsertJobScheduler("refresh-tokens", { every: 3_600_000 }, { name: "refresh-tokens", opts: { removeOnComplete: true, removeOnFail: 50 } });
   await maintenanceQueue.upsertJobScheduler("sync-inbox", { every: 10 * 60_000 }, { name: "sync-inbox", opts: { removeOnComplete: true, removeOnFail: 50 } });
+  // Spots posts deleted or taken down on the platform. One YouTube call checks 50 videos.
+  await maintenanceQueue.upsertJobScheduler("sync-removals", { every: 15 * 60_000 }, { name: "sync-removals", opts: { removeOnComplete: true, removeOnFail: 50 } });
   await maintenanceQueue.upsertJobScheduler("sync-insights", { every: 6 * 3_600_000 }, { name: "sync-insights", opts: { removeOnComplete: true, removeOnFail: 50 } });
   await maintenanceQueue.upsertJobScheduler("purge", { pattern: "17 3 * * *" }, { name: "purge", opts: { removeOnComplete: true, removeOnFail: 50 } });
   console.log(`Worker ready${dryRun() ? " (DRY RUN: nothing is sent to platforms)" : ""}`);

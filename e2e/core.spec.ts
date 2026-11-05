@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import postgres from "postgres";
 import { go, openWorkspace, signInWithForm } from "./helpers";
 
 // Tests run in order on one worker (see playwright.config.ts); a failure doesn't stop the rest.
@@ -36,7 +37,7 @@ test("publish now goes out on each channel and notifies the author", async ({ pa
 
   await go(page, `${base}/search?q=${encodeURIComponent(caption)}`);
   await page.getByRole("link", { name: caption }).click();
-  await expect(page.locator(".page-head .pill")).toHaveText("Published", { timeout: 45_000 });
+  await expect(page.locator(".pd-meta .pill").first()).toHaveText("Published", { timeout: 45_000 });
   await expect(page.locator("[data-target]")).toHaveCount(2);
 
   await page.reload();
@@ -295,4 +296,27 @@ test("a YouTube thumbnail can be dropped in or taken from a frame of the video",
   await go(page, `${base}/search?q=${encodeURIComponent(caption)}`);
   await page.getByRole("link", { name: caption }).first().click();
   await expect(page.getByRole("region", { name: /YouTube settings/ }).getByText("Using frame-2.5s.jpg")).toBeVisible();
+});
+
+test("a post deleted on the platform shows as a red, struck-through entry and on its page", async ({ page }) => {
+  if (!process.env.DATABASE_URL) process.loadEnvFile(".env");
+  const sql = postgres(process.env.DATABASE_URL!, { max: 1 });
+  const [row] = await sql<{ id: string; day: string }[]>`
+    select p.id, to_char(p.scheduled_at at time zone w.timezone, 'YYYY-MM-DD') as day
+    from posts p join workspaces w on w.id = p.workspace_id
+    where p.caption like 'Cold brew Fridays%' and p.status = 'published' limit 1`;
+  await sql`update post_targets set removed_at = now(), removed_reason = 'Deleted on Facebook' where post_id = ${row!.id} and channel_id in (select id from channels where platform = 'facebook')`;
+  await sql.end();
+
+  const base = await openWorkspace(page);
+  await go(page, `${base}/calendar?view=month&d=${row!.day}`);
+  const chip = page.locator(".ev.removed", { hasText: "Cold brew Fridays" });
+  await expect(chip).toBeVisible();
+  await expect(chip).toHaveAttribute("title", /Deleted on Facebook/);
+
+  await go(page, `${base}/posts/${row!.id}`);
+  await expect(page.locator(".pd-meta")).toContainText("Deleted on platform");
+  await expect(page.locator(".ov-alert.bad")).toContainText("Deleted on Facebook");
+  await expect(page.locator(".pd-target.removed")).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "Duplicate" })).toBeVisible();
 });

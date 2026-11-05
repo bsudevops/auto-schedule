@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, asc, count, desc, eq, gte, inArray, isNull, lt } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 import { ActivityList } from "@/components/ActivityList";
 import { Icon } from "@/components/Icon";
 import { EmptyState, PlatformBadge, PlatformStack, StatusPill } from "@/components/ui";
@@ -26,13 +26,16 @@ export default async function Overview({ params }: { params: Promise<{ workspace
   const monthStart = new Date(now.getTime() - 30 * 86_400_000);
   const ws = eq(posts.workspaceId, workspaceId);
 
-  const [upcoming, failed, recent, chans, [pub30], [unread], activity, perChannel] = await Promise.all([
+  const [upcoming, failed, removedPosts, recent, chans, [pub30], [unread], activity, perChannel] = await Promise.all([
     db.select({ id: posts.id, caption: posts.caption, at: posts.scheduledAt, status: posts.status, author: userTable.name })
       .from(posts).leftJoin(userTable, eq(userTable.id, posts.authorId))
       .where(and(ws, eq(posts.status, "scheduled"), gte(posts.scheduledAt, now), lt(posts.scheduledAt, in7))).orderBy(asc(posts.scheduledAt)).limit(60),
     db.select({ id: posts.id, caption: posts.caption, error: postTargets.error, platform: channels.platform })
       .from(postTargets).innerJoin(posts, eq(posts.id, postTargets.postId)).innerJoin(channels, eq(channels.id, postTargets.channelId))
       .where(and(ws, eq(postTargets.status, "failed"))).orderBy(desc(posts.scheduledAt)).limit(3),
+    db.select({ id: posts.id, caption: posts.caption, reason: postTargets.removedReason, platform: channels.platform })
+      .from(postTargets).innerJoin(posts, eq(posts.id, postTargets.postId)).innerJoin(channels, eq(channels.id, postTargets.channelId))
+      .where(and(ws, isNotNull(postTargets.removedAt), gte(postTargets.removedAt, ago30))).orderBy(desc(postTargets.removedAt)).limit(3),
     db.select({ id: posts.id, caption: posts.caption, at: posts.publishedAt })
       .from(posts).where(and(ws, eq(posts.status, "published"))).orderBy(desc(posts.publishedAt)).limit(4),
     db.select().from(channels).where(and(eq(channels.workspaceId, workspaceId), inArray(channels.status, ["connected", "expiring", "reconnect"]))).orderBy(asc(channels.platform)),
@@ -47,7 +50,7 @@ export default async function Overview({ params }: { params: Promise<{ workspace
   const recentIds = recent.map((p) => p.id);
   const [targetRows, covers] = await Promise.all([
     postIds.length
-      ? db.select({ postId: postTargets.postId, platform: channels.platform, url: postTargets.externalUrl }).from(postTargets).innerJoin(channels, eq(channels.id, postTargets.channelId)).where(inArray(postTargets.postId, postIds))
+      ? db.select({ postId: postTargets.postId, platform: channels.platform, url: postTargets.externalUrl, removedReason: postTargets.removedReason }).from(postTargets).innerJoin(channels, eq(channels.id, postTargets.channelId)).where(inArray(postTargets.postId, postIds))
       : [],
     recentIds.length
       ? db.select({ postId: postMedia.postId, position: postMedia.position, key: mediaAssets.storageKey, kind: mediaAssets.kind }).from(postMedia).innerJoin(mediaAssets, eq(mediaAssets.id, postMedia.assetId)).where(inArray(postMedia.postId, recentIds))
@@ -55,6 +58,7 @@ export default async function Overview({ params }: { params: Promise<{ workspace
   ]);
   const platformsOf = (id: string) => [...new Set(targetRows.filter((t) => t.postId === id).map((t) => t.platform))] as Platform[];
   const linkOf = (id: string) => targetRows.find((t) => t.postId === id && t.url);
+  const removedOf = (id: string) => targetRows.find((t) => t.postId === id && t.removedReason)?.removedReason;
   const coverOf = (id: string) => covers.filter((c) => c.postId === id).sort((a, b) => a.position - b.position)[0];
   const title = (caption: string) => (caption.split("\n")[0] || "Untitled post").slice(0, 90);
   const base = `/w/${workspaceId}`;
@@ -63,6 +67,7 @@ export default async function Overview({ params }: { params: Promise<{ workspace
 
   const attention = [
     ...failed.map((f) => ({ key: `f${f.id}${f.platform}`, tone: "bad" as const, title: `“${title(f.caption)}” failed on ${PLATFORMS[f.platform].name}`, body: f.error ?? "The platform rejected the post.", href: `${base}/calendar`, cta: "Review" })),
+    ...removedPosts.map((r) => ({ key: `r${r.id}${r.platform}`, tone: "bad" as const, title: `“${title(r.caption)}” is no longer on ${PLATFORMS[r.platform].name}`, body: r.reason ?? "The platform no longer has this post.", href: `${base}/posts/${r.id}`, cta: "View post" })),
     ...chans.filter((c) => c.status !== "connected").map((c) => ({
       key: c.id, tone: c.status === "reconnect" ? ("bad" as const) : ("warn" as const),
       title: c.status === "reconnect" ? `${PLATFORMS[c.platform].name} needs reconnecting` : `${PLATFORMS[c.platform].name} connection expires soon`,
@@ -189,7 +194,7 @@ export default async function Overview({ params }: { params: Promise<{ workspace
                       <div className="ov-tile-b">
                         <Link href={`${base}/posts/${p.id}`} className="t">{title(p.caption)}</Link>
                         <span className="s">{p.at ? `${fmtDay(p.at, tz)} at ${fmtTime(p.at, tz)}` : ""}</span>
-                        {live?.url && <a href={live.url} target="_blank" rel="noreferrer" className="ov-live">View on {PLATFORMS[live.platform].name}</a>}
+                        {removedOf(p.id) ? <span className="ov-gone">{removedOf(p.id)}</span> : live?.url && <a href={live.url} target="_blank" rel="noreferrer" className="ov-live">View on {PLATFORMS[live.platform].name}</a>}
                       </div>
                     </article>
                   );

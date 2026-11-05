@@ -5,6 +5,7 @@
     { "path": "/api/cron/inbox", "schedule": "*/10 * * * *" },
     { "path": "/api/cron/tokens", "schedule": "0 * * * *" },
     { "path": "/api/cron/insights", "schedule": "0 */6 * * *" },
+    { "path": "/api/cron/removals", "schedule": "*/15 * * * *" },
     { "path": "/api/cron/purge", "schedule": "17 3 * * *" }
   ]
 }

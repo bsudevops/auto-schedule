@@ -1,6 +1,9 @@
-import { and, eq, gte, isNotNull, not, sql, like } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, not, sql, like } from "drizzle-orm";
 import { db } from "@/db";
 import { channelMetricsDaily, channels, inboxMessages, inboxThreads, postMetrics, postTargets, posts } from "@/db/schema";
+import { logActivity, postTitle } from "../activity";
+import { notify, workspaceManagers } from "../notify";
+import { PLATFORMS } from "../platforms";
 import { classifySentiment } from "../sentiment";
 import { emitEvent } from "../webhooks";
 import { ENGAGE, type Ctx, type RemoteComment } from "./engage";
@@ -138,8 +141,65 @@ async function upsertConversation(c: Channel, t: { id: string; externalPostId: s
   return newIncoming;
 }
 
+/**
+ * Asks the platform which of this channel's published posts still exist. A post deleted or taken down
+ * there is marked removed (once, with a notification); one that comes back is unmarked.
+ * Pass targetIds to check only those (the post page's "Check now").
+ */
+export async function syncRemovals(c: Channel, targetIds?: string[]) {
+  const src = ENGAGE[c.platform];
+  if (!src?.removed) return { checked: 0, removed: 0 };
+  const rows = await db
+    .select({ id: postTargets.id, externalPostId: postTargets.externalPostId, removedAt: postTargets.removedAt, postId: posts.id, caption: posts.caption })
+    .from(postTargets)
+    .innerJoin(posts, eq(posts.id, postTargets.postId))
+    .where(and(
+      eq(postTargets.channelId, c.id),
+      eq(postTargets.status, "published"),
+      isNotNull(postTargets.externalPostId),
+      not(like(postTargets.externalPostId, "dry-run-%")),
+      targetIds ? inArray(postTargets.id, targetIds.length ? targetIds : ["00000000-0000-0000-0000-000000000000"]) : undefined,
+    ))
+    .limit(500);
+  if (!rows.length) return { checked: 0, removed: 0 };
+  const gone = await src.removed(await ctxFor(c), rows.map((r) => r.externalPostId!));
+  let removed = 0;
+  for (const r of rows) {
+    const reason = gone.get(r.externalPostId!);
+    if (reason && !r.removedAt) {
+      removed++;
+      await db.update(postTargets).set({ removedAt: new Date(), removedReason: reason }).where(eq(postTargets.id, r.id));
+      const href = `/w/${c.workspaceId}/posts/${r.postId}`;
+      const name = PLATFORMS[c.platform].name;
+      await logActivity({ workspaceId: c.workspaceId, actorId: null, verb: "post.removed", summary: `${postTitle(r.caption)} is no longer on ${name}: ${reason.toLowerCase()}`, href });
+      await notify({
+        userIds: await workspaceManagers(c.workspaceId),
+        workspaceId: c.workspaceId,
+        type: "post_removed",
+        payload: { title: `${postTitle(r.caption)} is no longer on ${name}`, body: `${reason}. It stays in BSU Scheduler, marked in red on the calendar.`, href },
+      });
+    } else if (!reason && r.removedAt) {
+      await db.update(postTargets).set({ removedAt: null, removedReason: null }).where(eq(postTargets.id, r.id));
+    }
+  }
+  return { checked: rows.length, removed };
+}
+
+/** Checks one post's channels now, for the post page. */
+export async function checkPostRemovals(postId: string) {
+  const ts = await db.select({ id: postTargets.id, channelId: postTargets.channelId }).from(postTargets).where(eq(postTargets.postId, postId));
+  const ids = [...new Set(ts.map((t) => t.channelId))];
+  const chans = ids.length ? await db.select().from(channels).where(inArray(channels.id, ids)) : [];
+  let removed = 0;
+  for (const c of chans) {
+    if (c.status === "disconnected") continue;
+    removed += (await syncRemovals(c, ts.filter((t) => t.channelId === c.id).map((t) => t.id))).removed;
+  }
+  return { removed };
+}
+
 /** Runs one kind of sync over every connected channel. One channel's failure never stops the others. */
-export async function syncAll(kind: "insights" | "inbox") {
+export async function syncAll(kind: "insights" | "inbox" | "removals") {
   if (dryRun()) return { skipped: "dry run" };
   const rows = await db.select().from(channels).where(eq(channels.status, "connected"));
   const expiring = await db.select().from(channels).where(eq(channels.status, "expiring"));
@@ -147,6 +207,7 @@ export async function syncAll(kind: "insights" | "inbox") {
   for (const c of [...rows, ...expiring]) {
     try {
       if (kind === "insights") await syncInsights(c);
+      else if (kind === "removals") await syncRemovals(c);
       else await syncInbox(c);
       ok++;
     } catch (e) {

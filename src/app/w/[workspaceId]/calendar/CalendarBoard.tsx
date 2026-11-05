@@ -7,7 +7,7 @@ import { Icon } from "@/components/Icon";
 import { PlatformBadge } from "@/components/ui";
 import type { Platform } from "@/db/schema";
 
-export type CalPost = { id: string; title: string; status: string; date: string | null; time: string | null; hour: number | null; platforms: Platform[]; movable: boolean };
+export type CalPost = { id: string; title: string; status: string; date: string | null; time: string | null; hour: number | null; platforms: Platform[]; movable: boolean; /** Why it is gone from a platform, when it is. */ removed?: string | null };
 
 const EV_CLASS: Record<string, string> = { published: "published", draft: "draft", failed: "failed", partially_failed: "failed" };
 const HOURS = Array.from({ length: 17 }, (_, i) => i + 6);
@@ -45,8 +45,8 @@ export function CalendarBoard({ workspaceId, view, days, today, month, posts, op
   });
 
   const chip = (p: CalPost) => (
-    <Link key={p.id} href={`/w/${workspaceId}/posts/${p.id}`} className={`ev ${EV_CLASS[p.status] ?? ""}`} draggable={p.movable}
-      onDragStart={(e) => e.dataTransfer.setData("text/post", p.id)} title={p.title} style={{ textDecoration: "none", color: "inherit", cursor: p.movable ? "grab" : "pointer" }}>
+    <Link key={p.id} href={`/w/${workspaceId}/posts/${p.id}`} className={`ev ${EV_CLASS[p.status] ?? ""}${p.removed ? " removed" : ""}`} draggable={p.movable}
+      onDragStart={(e) => e.dataTransfer.setData("text/post", p.id)} title={p.removed ? `${p.title}: ${p.removed}` : p.title} style={{ textDecoration: "none", color: "inherit", cursor: p.movable ? "grab" : "pointer" }}>
       {p.platforms[0] && <PlatformBadge platform={p.platforms[0]} size="xs" />}
       {p.time && <span className="tm">{fmtTime(p.time)}</span>}
       <span className="tt">{p.title}</span>
