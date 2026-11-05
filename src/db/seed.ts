@@ -37,6 +37,7 @@ const ch = await db.insert(channels).values([
   { workspaceId: harbor!.id, platform: "facebook", externalId: "fb-1", handle: "harborcoffee", displayName: "Harbor Coffee", status: "connected", followers: 9310 },
   { workspaceId: harbor!.id, platform: "linkedin", externalId: "li-1", handle: "harbor-coffee-co", displayName: "Harbor Coffee Co.", status: "connected", followers: 2280 },
   { workspaceId: harbor!.id, platform: "tiktok", externalId: "tt-1", handle: "harborcoffee", displayName: "Harbor Coffee", status: "reconnect", followers: 12650, lastError: "The TikTok access token expired." },
+  { workspaceId: harbor!.id, platform: "youtube", externalId: "yt-1", handle: "harborcoffee", displayName: "Harbor Coffee", status: "connected", followers: 1540 },
 ]).returning();
 const [ig, fb, li, tt] = ch;
 

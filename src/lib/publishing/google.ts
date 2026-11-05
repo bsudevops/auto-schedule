@@ -1,5 +1,6 @@
 import { env, form, http, kindForStatus, type HttpResponse } from "./http";
-import { PublishError, type ConnectedAccount, type ProviderAdapter, type PublishInput, type PublishResult, type Publisher, type TokenSet } from "./types";
+import { PublishError, type ConnectedAccount, type ProviderAdapter, type PublishInput, type PublishMedia, type PublishResult, type Publisher, type TokenSet } from "./types";
+import { defaultYoutubeOptions, youtubeOptions, youtubeTitle } from "../youtube-options";
 
 /**
  * Google: YouTube (Data API v3) and Google Business Profile.
@@ -84,25 +85,43 @@ export const youtubeProvider: ProviderAdapter = {
   refresh,
 };
 
-/** First line of the caption becomes the title (YouTube allows 100 characters, no angle brackets). */
-export function youtubeTitle(caption: string): string {
-  const first = caption.split("\n").find((l) => l.trim())?.trim() ?? "";
-  const clean = first.replace(/[<>]/g, "");
-  if (!clean) return "New video";
-  return clean.length > 100 ? `${clean.slice(0, 99).trimEnd()}…` : clean;
-}
+export { youtubeTitle };
 
 export const youtubePublisher: Publisher = {
-  async publish({ channel, accessToken: t, caption, media }: PublishInput): Promise<PublishResult> {
+  async publish({ channel, accessToken: t, caption, media, options, thumbnail }: PublishInput): Promise<PublishResult> {
     const video = media.find((m) => m.kind === "video");
     if (!video || media.length !== 1) throw new PublishError("YouTube posts need exactly one video.", "permanent");
-    const privacy = String(channel.meta.privacy ?? env("YOUTUBE_PRIVACY_STATUS") ?? "") || "public";
-    const body = {
-      snippet: { title: youtubeTitle(caption), description: caption.replace(/[<>]/g, "").slice(0, 5000), categoryId: String(channel.meta.categoryId ?? "22") },
-      status: { privacyStatus: privacy, selfDeclaredMadeForKids: false },
+    const parsed0 = youtubeOptions.safeParse(options ?? {});
+    const o = parsed0.success ? parsed0.data : defaultYoutubeOptions();
+    // A server-wide override (YOUTUBE_PRIVACY_STATUS) still wins, for unverified Google projects that can only upload private videos.
+    const forced = String(channel.meta.privacy ?? env("YOUTUBE_PRIVACY_STATUS") ?? "");
+    const privacy = forced && forced !== "public" ? forced : o.visibility;
+    const snippet: Record<string, unknown> = {
+      title: o.title || youtubeTitle(caption),
+      description: caption.replace(/[<>]/g, "").slice(0, 5000),
+      categoryId: o.categoryId || String(channel.meta.categoryId ?? "22"),
     };
+    if (o.tags.length) snippet.tags = o.tags;
+    if (o.language) {
+      snippet.defaultLanguage = o.language;
+      snippet.defaultAudioLanguage = o.language;
+    }
+    const body: Record<string, unknown> = {
+      snippet,
+      status: {
+        privacyStatus: privacy,
+        selfDeclaredMadeForKids: o.madeForKids,
+        license: o.license,
+        embeddable: o.embeddable,
+        publicStatsViewable: o.showLikes,
+        containsSyntheticMedia: o.alteredContent,
+      },
+      paidProductPlacementDetails: { hasPaidProductPlacement: o.paidPromotion },
+    };
+    if (o.recordingDate) body.recordingDetails = { recordingDate: `${o.recordingDate}T00:00:00Z` };
+    const parts = Object.keys(body).join(",");
     // Resumable upload: open a session, then send the bytes to the address Google returns.
-    const init = await http(`https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status`, {
+    const init = await http(`https://www.googleapis.com/upload/youtube/v3/videos?${form({ uploadType: "resumable", part: parts, notifySubscribers: String(o.notifySubscribers) })}`, {
       method: "POST",
       headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Type": video.mimeType, "X-Upload-Content-Length": String(video.sizeBytes) },
       body: JSON.stringify(body),
@@ -134,10 +153,59 @@ export const youtubePublisher: Publisher = {
     const v = parsed as { id?: string; status?: { uploadStatus?: string; rejectionReason?: string } } | null;
     if (!v?.id) throw new PublishError("YouTube accepted the upload but returned no video ID.", "temporary");
     if (v.status?.uploadStatus === "rejected") throw new PublishError(`YouTube rejected the video (${v.status.rejectionReason ?? "no reason given"}).`, "permanent");
-    const warnings = privacy !== "public" ? [`Uploaded as ${privacy}. Unverified Google Cloud projects can only upload private videos until Google audits the app.`] : [];
+
+    // The video is up. Thumbnail and playlist are extras: if one fails, the post still counts as published, with a warning.
+    const warnings: string[] = [];
+    if (privacy !== o.visibility) warnings.push(`Uploaded as ${privacy}. Unverified Google Cloud projects can only upload private videos until Google audits the app.`);
+    if (thumbnail) warnings.push(...(await setThumbnail(t, v.id, thumbnail)));
+    if (o.playlistId) warnings.push(...(await addToPlaylist(t, v.id, o.playlistId)));
     return { externalId: v.id, url: `https://www.youtube.com/watch?v=${v.id}`, warnings };
   },
 };
+
+const THUMB_MAX = 2 * 1024 * 1024;
+const networkFailure = (e: Error): HttpResponse => ({ status: 0, headers: new Headers(), body: { error: e.message }, text: e.message });
+
+async function setThumbnail(t: string, videoId: string, img: PublishMedia): Promise<string[]> {
+  if (!/^image\/(jpeg|png)$/.test(img.mimeType)) return ["The thumbnail wasn't set: YouTube takes JPG or PNG images."];
+  if (img.sizeBytes > THUMB_MAX) return ["The thumbnail wasn't set: YouTube thumbnails must be 2 MB or smaller."];
+  const src = await fetch(img.url, { signal: AbortSignal.timeout(60_000) }).catch(() => null);
+  if (!src?.ok) return ["The thumbnail wasn't set: couldn't read the image from storage."];
+  const bytes = await src.arrayBuffer();
+  const r = await http(`https://www.googleapis.com/upload/youtube/v3/thumbnails/set?${form({ videoId, uploadType: "media" })}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${t}`, "Content-Type": img.mimeType },
+    body: bytes,
+    timeoutMs: 120_000,
+  }).catch(networkFailure);
+  if (r.status >= 200 && r.status < 300) return [];
+  const why = googleError(r, "The thumbnail wasn't set", "YouTube").message;
+  return [/verif|forbidden|permission/i.test(why) ? `${why} Custom thumbnails need a verified YouTube channel (youtube.com/verify).` : why];
+}
+
+async function addToPlaylist(t: string, videoId: string, playlistId: string): Promise<string[]> {
+  const r = await http("https://www.googleapis.com/youtube/v3/playlistItems?part=snippet", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ snippet: { playlistId, resourceId: { kind: "youtube#video", videoId } } }),
+  }).catch(networkFailure);
+  if (r.status >= 200 && r.status < 300) return [];
+  return [googleError(r, "The video wasn't added to the playlist", "YouTube").message];
+}
+
+/** The channel's own playlists, for the playlist picker. */
+export async function youtubePlaylists(t: string): Promise<{ id: string; title: string }[]> {
+  const out: { id: string; title: string }[] = [];
+  let pageToken = "";
+  for (let i = 0; i < 4; i++) {
+    const r = await gget<{ items?: { id: string; snippet?: { title?: string } }[]; nextPageToken?: string }>(
+      `https://www.googleapis.com/youtube/v3/playlists?${form({ part: "snippet", mine: "true", maxResults: "50", ...(pageToken ? { pageToken } : {}) })}`, t, "Listing your playlists", "YouTube");
+    for (const p of r.items ?? []) out.push({ id: p.id, title: p.snippet?.title || "Untitled playlist" });
+    if (!r.nextPageToken) break;
+    pageToken = r.nextPageToken;
+  }
+  return out;
+}
 
 /* ----------------------- Google Business Profile ----------------------- */
 

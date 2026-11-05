@@ -37,7 +37,7 @@ export async function loadComposer(opts: { member: Member; workspace: { id: stri
   let initial: ComposerProps["initial"] = {
     channelIds: chans.filter((c) => c.status !== "reconnect").slice(0, 2).map((c) => c.id),
     caption: workspace.defaultHashtags ? `\n\n${workspace.defaultHashtags}` : "",
-    overrides: {}, mediaIds: [], firstComment: workspace.defaultFirstComment, tags: [],
+    overrides: {}, options: {}, mediaIds: [], firstComment: workspace.defaultFirstComment, tags: [],
     mode: "schedule", date: opts.date && /^\d{4}-\d{2}-\d{2}$/.test(opts.date) ? opts.date : inTwoHours.date, time: inTwoHours.time, queueId: qs[0]?.id,
   };
   let postStatus: string | null = null;
@@ -53,6 +53,7 @@ export async function loadComposer(opts: { member: Member; workspace: { id: stri
     initial = {
       postId: p.id, channelIds: targets.map((t) => t.channelId), caption: p.caption,
       overrides: Object.fromEntries(targets.filter((t) => t.captionOverride != null).map((t) => [t.channelId, t.captionOverride!])),
+      options: Object.fromEntries(targets.map((t) => [t.channelId, t.options])),
       mediaIds: pm.map((m) => m.assetId), firstComment: p.firstComment, tags: p.tags,
       mode: p.status === "draft" ? "draft" : p.queueId ? "queue" : "schedule", date: when.date, time: when.time, queueId: p.queueId ?? qs[0]?.id,
     };
@@ -72,7 +73,7 @@ export async function loadComposer(opts: { member: Member; workspace: { id: stri
     canPublish: can(member, "publish"),
     postStatus,
     channels: chans,
-    media: assets.map((a) => ({ id: a.id, kind: a.kind, filename: a.filename, thumb: publicUrl(thumbKey(a.storageKey, a.kind)), url: publicUrl(a.storageKey) })),
+    media: assets.map((a) => ({ id: a.id, kind: a.kind, filename: a.filename, thumb: publicUrl(thumbKey(a.storageKey, a.kind)), url: publicUrl(a.storageKey), width: a.width, height: a.height, durationMs: a.durationMs })),
     queues: queueOptions,
     hashtagSets: sets,
     aiEnabled: aiConfigured(),

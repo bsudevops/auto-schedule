@@ -9,12 +9,15 @@ import { nextOpenSlot, zonedToUtc } from "./queue-slots";
 import { enqueueTarget } from "./jobs";
 import { kickPublishing } from "./publishing/inline";
 import { logActivity, postTitle } from "./activity";
+import { youtubeOptions } from "./youtube-options";
 
 export const postInput = z.object({
   postId: z.string().uuid().optional(),
   channelIds: z.array(z.string().uuid()).max(20),
   caption: z.string().max(100_000),
   overrides: z.record(z.string().uuid(), z.string().max(100_000)).default({}),
+  // Platform settings per channel ID, such as YouTube's title and visibility.
+  options: z.record(z.string().uuid(), z.record(z.string(), z.unknown())).default({}),
   mediaIds: z.array(z.string().uuid()).max(10).default([]),
   firstComment: z.string().max(2200).default(""),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
@@ -57,6 +60,19 @@ export async function savePost(ctx: Ctx, raw: unknown): Promise<Result> {
   const orderedMedia = input.mediaIds.map((id) => media.find((m) => m.id === id)!);
   const overrides = Object.fromEntries(Object.entries(input.overrides).filter(([id]) => input.channelIds.includes(id)));
 
+  // Platform settings: checked per platform, and any thumbnail must be an image in this workspace.
+  const options: Record<string, Record<string, unknown>> = {};
+  for (const c of chans) {
+    if (c.platform !== "youtube") continue;
+    const o = youtubeOptions.safeParse(input.options[c.id] ?? {});
+    if (!o.success) return { ok: false, error: o.error.issues[0]?.message ?? "Check the YouTube settings." };
+    if (o.data.thumbnailAssetId) {
+      const [thumb] = await db.select({ kind: mediaAssets.kind }).from(mediaAssets).where(and(eq(mediaAssets.id, o.data.thumbnailAssetId), eq(mediaAssets.workspaceId, wsId)));
+      if (thumb?.kind !== "image") return { ok: false, error: "The YouTube thumbnail must be an image from your media library." };
+    }
+    options[c.id] = o.data;
+  }
+
   let scheduledAt: Date | null = null;
   let queueId: string | null = null;
   if (input.mode !== "draft") {
@@ -92,7 +108,7 @@ export async function savePost(ctx: Ctx, raw: unknown): Promise<Result> {
     if (postId) await tx.update(posts).set(values).where(eq(posts.id, postId));
     else [{ id: postId }] = (await tx.insert(posts).values({ ...values, workspaceId: wsId, authorId: ctx.member.userId }).returning({ id: posts.id })) as [{ id: string }];
     await tx.delete(postTargets).where(eq(postTargets.postId, postId!));
-    if (chans.length) await tx.insert(postTargets).values(chans.map((c) => ({ postId: postId!, channelId: c.id, captionOverride: overrides[c.id] ?? null })));
+    if (chans.length) await tx.insert(postTargets).values(chans.map((c) => ({ postId: postId!, channelId: c.id, captionOverride: overrides[c.id] ?? null, options: options[c.id] ?? {} })));
     await tx.delete(postMedia).where(eq(postMedia.postId, postId!));
     if (orderedMedia.length) await tx.insert(postMedia).values(orderedMedia.map((m, i) => ({ postId: postId!, assetId: m.id, position: i })));
     return postId!;
