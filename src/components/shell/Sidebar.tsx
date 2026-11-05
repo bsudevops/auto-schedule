@@ -91,7 +91,10 @@ export function Sidebar(props: { brand: string; tagline: string; current: Ws; wo
               </Link>
             ))}
             <hr />
-            <Link className="mi" href={`${base}/settings/organization`} style={{ textDecoration: "none", color: "inherit" }}>
+            <Link className="mi" href="/organization" style={{ textDecoration: "none", color: "inherit" }}>
+              <Icon name="grid" size={16} /> All workspaces
+            </Link>
+            <Link className="mi" href="/organization" style={{ textDecoration: "none", color: "inherit" }}>
               <Icon name="plus" size={16} /> New workspace
             </Link>
           </div>

@@ -203,3 +203,14 @@ test("queues shuffle, best times show, and the team sees it in activity", async 
   await page.getByRole("link", { name: "See all" }).last().click();
   await expect(page.getByRole("heading", { name: "Team activity" })).toBeVisible();
 });
+
+test("sign-in lands on the organization page, where a client workspace can be created", async ({ page }) => {
+  await go(page, "/");
+  await expect(page).toHaveURL(/\/organization$/);
+  await expect(page.getByRole("link", { name: /Harbor Coffee Co\./ }).first()).toBeVisible();
+  const name = `Client ${Date.now()}`;
+  await page.getByLabel("Workspace name").fill(name);
+  await page.getByRole("button", { name: "Create workspace" }).click();
+  await page.waitForURL(/\/w\/[0-9a-f-]{36}/);
+  await expect(page.getByText(name).first()).toBeVisible();
+});
