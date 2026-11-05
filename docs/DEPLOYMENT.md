@@ -34,12 +34,29 @@ Use managed PostgreSQL and Redis, and Cloudflare R2 or AWS S3 for media.
 
 - `APP_URL` and `BETTER_AUTH_URL`: your `https://` address
 - `BETTER_AUTH_SECRET`: 32+ random characters. `TOKEN_ENCRYPTION_KEY`: 32 random bytes, base64 (`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`). Keep a copy of the encryption key somewhere safe: without it, stored channel tokens can't be read and every channel must be reconnected.
-- `SMTP_*` and `EMAIL_FROM`: sign-up confirmation, invitations and password resets need real email
+- `SMTP_*` and `EMAIL_FROM`: sign-up confirmation, invitations, password resets and notification emails need real email. See [Email](#email) below.
 - `STORAGE_BACKEND=s3`, the `S3_*` values, and `MEDIA_PUBLIC_URL` on a different domain from the app (for example `https://media.example.com`)
 - `TRUSTED_PROXIES`: the address range of your load balancer or proxy
 - Platform keys: see [PLATFORM-SETUP.md](PLATFORM-SETUP.md). Leave `PUBLISH_DRY_RUN` unset.
 - Never run `npm run db:seed` against production (it refuses to)
 - Backups: daily PostgreSQL backups, and versioning on the media bucket
+
+## Email
+
+The app sends email with nodemailer over SMTP. Without `SMTP_HOST` it prints each email to the server log instead, and the invite form shows a link you can copy.
+
+| Variable | Gmail example | Notes |
+| --- | --- | --- |
+| `SMTP_HOST` | `smtp.gmail.com` | Any SMTP server works (Outlook: `smtp.office365.com`, Brevo, SendGrid, Amazon SES, Zoho). |
+| `SMTP_PORT` | `587` | `465` switches to SSL automatically. |
+| `SMTP_SECURE` | *(empty)* | Only to override the automatic choice: `true` or `false`. |
+| `SMTP_USER` | `you@gmail.com` | |
+| `SMTP_PASSWORD` | 16-letter app password | Gmail needs an [app password](https://myaccount.google.com/apppasswords) (turn on 2-Step Verification first); your normal password is refused. |
+| `EMAIL_FROM` | `"BSU Scheduler <you@gmail.com>"` | Gmail only sends from your own address. If left at the example value, `SMTP_USER` is used. |
+
+Restart after changing them (`docker compose -f docker-compose.prod.yml up -d`), then check with **Settings → Notifications → Send a test email**, or from the command line: `docker compose -f docker-compose.prod.yml exec web npm run email:test -- you@company.com`. Gmail allows about 500 emails a day; use a sending service for more.
+
+What gets emailed: workspace invitations (Members page, with **Resend** and **Cancel** for pending ones), sign-up confirmation, password reset, and the notifications each person turns on under Settings → Notifications (failed posts, removed posts, channels that need reconnecting, inbox assignments, and so on). If an invitation email fails, the invite still exists and the Members page shows its link to share by hand.
 
 ## Optional composer extras
 

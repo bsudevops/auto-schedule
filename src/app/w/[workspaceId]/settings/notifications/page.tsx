@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { notificationPrefs } from "@/db/schema";
+import { emailConfigured } from "@/lib/email";
 import { NOTIFICATION_TYPES, type NotificationType } from "@/lib/notify";
 import { requireWorkspace } from "@/lib/session";
 import { PrefsForm } from "./PrefsForm";
@@ -15,5 +16,5 @@ export default async function Page({ params }: { params: Promise<{ workspaceId: 
     const p = saved.find((s) => s.type === type);
     return { type, label: d.label, inApp: p?.inApp ?? d.inApp, email: p?.email ?? d.email };
   });
-  return <PrefsForm rows={rows} email={user.email} workspaceId={workspaceId} />;
+  return <PrefsForm rows={rows} email={user.email} workspaceId={workspaceId} emailOn={emailConfigured()} />;
 }
