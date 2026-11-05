@@ -14,15 +14,17 @@ export function ConsentForm({ fields, workspaces, scopes }: Props) {
     <form action={action} className="card card-b stack">
       {Object.entries(fields).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
       <label className="field"><span>Workspace</span>
-        <select className="input" name="workspaceId" id="workspaceId" required defaultValue={workspaces[0]?.id}>
+        <select className="input" name="workspaceId" id="workspaceId" required defaultValue="all">
+          <option value="all">All workspaces you own or manage</option>
           {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name} · {w.orgName}</option>)}
         </select>
       </label>
+      <p className="muted" style={{ fontSize: 12.5, marginTop: -6 }}>With all workspaces, it also gets client workspaces you add later. You tell it which client to work on.</p>
       <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
         <span>It may</span>
         {scopes.map((s) => (
           <label key={s.id} className="row" style={{ gap: 8, fontSize: 14 }}>
-            <input type="checkbox" name="scopes" value={s.id} defaultChecked style={{ accentColor: "var(--sky)" }} /> {s.label}
+            <input type="checkbox" name="scopes" value={s.id} defaultChecked style={{ accentColor: "var(--sky)" }} /> {s.label}{s.id === "workspaces:create" ? " (all workspaces only)" : ""}
           </label>
         ))}
       </fieldset>

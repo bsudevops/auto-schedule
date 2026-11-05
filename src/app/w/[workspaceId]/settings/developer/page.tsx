@@ -1,6 +1,6 @@
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
-import { apiKeys, oauthClients, oauthGrants, user, webhookDeliveries, webhooks } from "@/db/schema";
+import { apiKeys, oauthClients, oauthGrants, user, webhookDeliveries, webhooks, workspaceMembers } from "@/db/schema";
 import { API_SCOPES } from "@/lib/api-auth";
 import { can } from "@/lib/permissions";
 import { requireWorkspace } from "@/lib/session";
@@ -24,7 +24,16 @@ export default async function Page({ params }: { params: Promise<{ workspaceId: 
       .from(oauthGrants)
       .innerJoin(oauthClients, eq(oauthClients.id, oauthGrants.clientId))
       .leftJoin(user, eq(user.id, oauthGrants.userId))
-      .where(and(eq(oauthGrants.workspaceId, workspaceId), isNull(oauthGrants.revokedAt)))
+      // This workspace's connections, plus all-workspace connections of people who are members here.
+      .where(
+        and(
+          isNull(oauthGrants.revokedAt),
+          or(
+            eq(oauthGrants.workspaceId, workspaceId),
+            and(isNull(oauthGrants.workspaceId), inArray(oauthGrants.userId, db.select({ id: workspaceMembers.userId }).from(workspaceMembers).where(eq(workspaceMembers.workspaceId, workspaceId)))),
+          ),
+        ),
+      )
       .orderBy(desc(oauthGrants.createdAt)),
   ]);
   const deliveries = hooks.length
@@ -42,7 +51,7 @@ export default async function Page({ params }: { params: Promise<{ workspaceId: 
       />
       <ConnectedApps
         workspaceId={workspaceId}
-        apps={apps.map(({ g, app, by }) => ({ id: g.id, app, by: by ?? "Former member", scopes: g.scopes, createdAt: g.createdAt.toISOString(), lastUsedAt: iso(g.lastUsedAt) }))}
+        apps={apps.map(({ g, app, by }) => ({ id: g.id, app, by: by ?? "Former member", allWorkspaces: g.workspaceId === null, scopes: g.scopes, createdAt: g.createdAt.toISOString(), lastUsedAt: iso(g.lastUsedAt) }))}
       />
       <section className="card">
         <div className="card-h"><h2>Connect an AI assistant</h2><a className="muted" style={{ fontSize: 12.5 }} href="https://github.com/bsudevops/auto-schedule/blob/main/docs/MCP.md" target="_blank" rel="noopener noreferrer">Setup guide</a></div>

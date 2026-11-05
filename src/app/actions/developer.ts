@@ -3,7 +3,7 @@ import { and, count, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
-import { apiKeys, oauthGrants, webhooks } from "@/db/schema";
+import { apiKeys, oauthGrants, webhooks, workspaceMembers } from "@/db/schema";
 import { revokeGrant } from "@/lib/oauth";
 import { API_SCOPES } from "@/lib/api-auth";
 import { encryptSecret, newApiKey } from "@/lib/crypto";
@@ -84,8 +84,13 @@ export async function testWebhookAction(workspaceId: string, id: string) {
 /** Disconnects an app such as Claude from this workspace. Its tokens stop working at once. */
 export async function disconnectAppAction(workspaceId: string, grantId: string) {
   await requireWorkspace(workspaceId, "manage_api");
-  const [g] = await db.select({ id: oauthGrants.id }).from(oauthGrants).where(and(eq(oauthGrants.id, grantId), eq(oauthGrants.workspaceId, workspaceId)));
-  if (g) await revokeGrant(g.id);
+  const [g] = await db.select().from(oauthGrants).where(eq(oauthGrants.id, grantId));
+  if (!g) return { ok: true };
+  // An all-workspace connection can be disconnected from any workspace its person belongs to.
+  const here =
+    g.workspaceId === workspaceId ||
+    (g.workspaceId === null && (await db.select({ id: workspaceMembers.userId }).from(workspaceMembers).where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, g.userId)))).length > 0);
+  if (here) await revokeGrant(g.id);
   refresh(workspaceId);
   return { ok: true };
 }

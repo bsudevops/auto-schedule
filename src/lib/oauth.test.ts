@@ -17,7 +17,7 @@ describe("OAuth for the MCP server", () => {
   });
 
   it("keeps only known scopes, and grants all when none are asked for", () => {
-    expect(parseScopes(undefined)).toEqual(["posts:read", "posts:write", "channels:read", "analytics:read"]);
+    expect(parseScopes(undefined)).toEqual(["posts:read", "posts:write", "channels:read", "analytics:read", "workspaces:create"]);
     expect(parseScopes("posts:read  bogus analytics:read")).toEqual(["posts:read", "analytics:read"]);
     expect(parseScopes("bogus")).toEqual([]);
   });

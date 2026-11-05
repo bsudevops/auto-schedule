@@ -20,7 +20,10 @@ const CODE_TTL_MS = 10 * 60 * 1000;
 export const issuer = () => (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
 export const mcpResource = () => `${issuer()}/api/mcp`;
 export const resourceMetadataUrl = () => `${issuer()}/.well-known/oauth-protected-resource`;
-const ALL_SCOPES = Object.keys(API_SCOPES);
+/** What a connected app may be allowed. Adding workspaces only applies to a connection that covers all workspaces. */
+export const OAUTH_SCOPES = { ...API_SCOPES, "workspaces:create": "Add new client workspaces" } as const;
+export const ACCOUNT_ONLY_SCOPES = ["workspaces:create"];
+const ALL_SCOPES = Object.keys(OAUTH_SCOPES);
 
 export const protectedResourceMetadata = () => ({
   resource: mcpResource(),
@@ -127,19 +130,23 @@ export async function authenticateClient(id: string | null, secret: string | nul
   return c;
 }
 
-/** The person can connect an app to a workspace only if they could create an API key there. */
-export async function canConnect(userId: string, workspaceId: string): Promise<boolean> {
+/**
+ * The person can connect an app to a workspace only if they could create an API key there.
+ * A connection to all workspaces (null) only ever reaches the workspaces they own or manage, checked on each use.
+ */
+export async function canConnect(userId: string, workspaceId: string | null): Promise<boolean> {
+  if (workspaceId === null) return true;
   const [m] = await db.select().from(workspaceMembers).where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)));
   return !!m && can({ userId, role: m.role, active: true }, "manage_api");
 }
 
-export async function createCode(v: { clientId: string; userId: string; workspaceId: string; scopes: string[]; redirectUri: string; codeChallenge: string; resource: string | null }) {
+export async function createCode(v: { clientId: string; userId: string; workspaceId: string | null; scopes: string[]; redirectUri: string; codeChallenge: string; resource: string | null }) {
   const code = token("bsuo_");
   await db.insert(oauthCodes).values({ ...v, codeHash: sha256(code), expiresAt: new Date(Date.now() + CODE_TTL_MS) });
   return code;
 }
 
-async function issueAccess(clientId: string, clientName: string, userId: string, workspaceId: string, scopes: string[]) {
+async function issueAccess(clientId: string, clientName: string, userId: string, workspaceId: string | null, scopes: string[]) {
   const k = newApiKey();
   const [row] = await db
     .insert(apiKeys)

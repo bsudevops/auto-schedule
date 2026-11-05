@@ -27,7 +27,7 @@ test("an AI assistant signs in with OAuth, uses the MCP server, refreshes and is
   const qs = new URLSearchParams({ response_type: "code", client_id: client.client_id, redirect_uri: REDIRECT, state: "xyz", code_challenge: challenge, code_challenge_method: "S256", scope: "channels:read posts:read", resource: `${baseURL}/api/mcp` });
   await go(page, `/oauth/authorize?${qs}`);
   await expect(page.getByRole("heading", { name: "Connect Claude" })).toBeVisible();
-  await page.getByLabel("Workspace").selectOption({ label: "Harbor Coffee Co. · Northwind Agency" });
+  await page.locator("#workspaceId").selectOption({ label: "Harbor Coffee Co. · Northwind Agency" });
   await page.getByRole("button", { name: "Allow" }).click();
   await page.waitForURL((u) => u.href.startsWith(REDIRECT));
   const cb = new URL(page.url());
@@ -39,7 +39,7 @@ test("an AI assistant signs in with OAuth, uses the MCP server, refreshes and is
   expect((await exchange({ grant_type: "authorization_code", code, redirect_uri: REDIRECT, code_verifier: "x".repeat(43) })).status()).toBe(400);
   // The failed attempt used the code up, so sign in again.
   await go(page, `/oauth/authorize?${qs}`);
-  await page.getByLabel("Workspace").selectOption({ label: "Harbor Coffee Co. · Northwind Agency" });
+  await page.locator("#workspaceId").selectOption({ label: "Harbor Coffee Co. · Northwind Agency" });
   await page.getByRole("button", { name: "Allow" }).click();
   await page.waitForURL((u) => u.href.startsWith(REDIRECT));
   const code2 = new URL(page.url()).searchParams.get("code")!;
@@ -88,4 +88,60 @@ test("signing in from the consent link comes back to it", async ({ browser, requ
   // A link with an unregistered return address is refused on the page, not redirected.
   await go(anon, `/oauth/authorize?${new URLSearchParams({ ...Object.fromEntries(qs), redirect_uri: "https://evil.example/cb" })}`);
   await expect(anon.getByText("doesn't match the app's registration")).toBeVisible();
+});
+
+test("one connection can cover every workspace, and the assistant picks the client per request", async ({ page, request, baseURL }) => {
+  const client = await (await request.post("/oauth/register", { data: { client_name: "Claude", redirect_uris: [REDIRECT], token_endpoint_auth_method: "none" } })).json();
+  await page.route(`${REDIRECT}**`, (r) => r.fulfill({ status: 200, contentType: "text/plain", body: "ok" }));
+  const verifier = randomBytes(32).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const qs = new URLSearchParams({ response_type: "code", client_id: client.client_id, redirect_uri: REDIRECT, code_challenge: challenge, code_challenge_method: "S256", resource: `${baseURL}/api/mcp` });
+  await go(page, `/oauth/authorize?${qs}`);
+  await expect(page.locator("#workspaceId")).toHaveValue("all");
+  await page.getByRole("button", { name: "Allow" }).click();
+  await page.waitForURL((u) => u.href.startsWith(REDIRECT));
+  const code = new URL(page.url()).searchParams.get("code")!;
+  const tok = await (await request.post("/oauth/token", { form: { client_id: client.client_id, grant_type: "authorization_code", code, redirect_uri: REDIRECT, code_verifier: verifier } })).json();
+  expect(tok.scope).toContain("workspaces:create");
+
+  let n = 10;
+  const call = async (name: string, args: Record<string, unknown> = {}) => {
+    const res = await request.post("/api/mcp", { headers: { Authorization: `Bearer ${tok.access_token}` }, data: { jsonrpc: "2.0", id: n++, method: "tools/call", params: { name, arguments: args } } });
+    expect(res.status()).toBe(200);
+    return (await res.json()).result as { isError?: boolean; content: { text: string }[] };
+  };
+  const tools = await (await request.post("/api/mcp", { headers: { Authorization: `Bearer ${tok.access_token}` }, data: { jsonrpc: "2.0", id: 1, method: "tools/list" } })).json();
+  const names = tools.result.tools.map((t: { name: string }) => t.name);
+  expect(names).toEqual(expect.arrayContaining(["list_workspaces", "create_workspace", "list_channels", "create_post"]));
+
+  const list = JSON.parse((await call("list_workspaces")).content[0]!.text);
+  expect(list.workspaces.map((w: { name: string }) => w.name)).toEqual(expect.arrayContaining(["Harbor Coffee Co.", "Lumen Fitness"]));
+
+  // Without a workspace, the assistant is told which ones it can use.
+  const missing = await call("list_channels");
+  expect(missing.isError).toBe(true);
+  expect(missing.content[0]!.text).toContain("Harbor Coffee Co.");
+  const harbor = await call("list_channels", { workspace: "harbor coffee co." });
+  expect(harbor.isError).toBeUndefined();
+  expect(JSON.parse(harbor.content[0]!.text).length).toBeGreaterThan(0);
+  expect((await call("get_workspace", { workspace: "Nope" })).content[0]!.text).toContain("No workspace called");
+
+  // It can add a new client, which it can then use straight away.
+  const created = await call("create_workspace", { name: "Claude Test Client" });
+  expect(created.isError).toBeUndefined();
+  expect(JSON.parse((await call("get_workspace", { workspace: "Claude Test Client" })).content[0]!.text).workspace.name).toBe("Claude Test Client");
+
+  // A workspace API key can't be used for these tools: the REST API still refuses the account token.
+  expect((await request.get("/api/v1/me", { headers: { Authorization: `Bearer ${tok.access_token}` } })).status()).toBe(401);
+
+  // It shows in a workspace's Connected AI apps and can be disconnected there.
+  await go(page, "/organization");
+  await page.getByRole("link", { name: /Lumen Fitness/ }).first().click();
+  await page.waitForURL(/\/w\/[0-9a-f-]{36}/);
+  await go(page, `${page.url().match(/\/w\/[0-9a-f-]{36}/)![0]}/settings/developer`);
+  await expect(page.getByText("all their workspaces")).toBeVisible();
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Disconnect" }).first().click();
+  await expect(page.getByText("all their workspaces")).toHaveCount(0);
+  expect((await request.post("/api/mcp", { headers: { Authorization: `Bearer ${tok.access_token}` }, data: { jsonrpc: "2.0", id: 99, method: "tools/list" } })).status()).toBe(401);
 });
