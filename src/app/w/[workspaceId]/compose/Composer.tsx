@@ -11,7 +11,7 @@ import { addTags } from "@/lib/hashtags";
 import { checkPost } from "@/lib/post-rules";
 import { uploadFiles } from "../media/MediaControls";
 import { AiPanel, HashtagMenu, StockSearch, type HashtagSet } from "./ComposerTools";
-import { YoutubeSettings } from "./YoutubeSettings";
+import { YoutubeSettings, ytOptions } from "./YoutubeSettings";
 
 type Mode = "draft" | "now" | "schedule" | "queue";
 type Channel = { id: string; platform: Platform; handle: string; displayName: string; status: string };
@@ -27,6 +27,8 @@ export type ComposerProps = {
   queues: Array<{ id: string; name: string; next: string | null }>;
   hashtagSets: HashtagSet[];
   aiEnabled: boolean;
+  /** Gemini is set up, so captions and titles can be written from the media. */
+  mediaAiEnabled?: boolean;
   stockEnabled: boolean;
   initial: {
     postId?: string;
@@ -182,7 +184,7 @@ export function Composer(props: ComposerProps) {
                   </details>
                   <HashtagMenu workspaceId={workspaceId} sets={props.hashtagSets} caption={text} onHash={() => insert("#")} onInsert={(t) => setText(addTags(text, t))} />
                   {props.aiEnabled && (
-                    <button type="button" className={`icon-btn${aiOpen ? " on" : ""}`} title="Writing help" aria-label="Writing help" aria-expanded={aiOpen} onClick={() => setAiOpen((o) => !o)}><Icon name="spark" /></button>
+                    <button type="button" className={`icon-btn${aiOpen ? " on" : ""}`} title={props.mediaAiEnabled ? "AI writing: from your media or your text" : "Writing help"} aria-label="Writing help" aria-expanded={aiOpen} onClick={() => setAiOpen((o) => !o)}><Icon name="spark" /></button>
                   )}
                   <div className="counters">
                     {selected.map((c) => {
@@ -194,7 +196,12 @@ export function Composer(props: ComposerProps) {
                 </div>
                 {aiOpen && (
                   <AiPanel workspaceId={workspaceId} text={text} channelIds={chIds} onClose={() => setAiOpen(false)}
-                    onUse={(v, how) => setText(how === "tags" ? addTags(text, v.split(/\s+/)) : v)} />
+                    onUse={(v, how) => setText(how === "tags" ? addTags(text, v.split(/\s+/)) : v)}
+                    media={props.mediaAiEnabled ? {
+                      ids: chosenMedia.map((m) => m.id), kinds: chosenMedia.map((m) => m.kind),
+                      youtube: selected.some((c) => c.platform === "youtube"),
+                      onUseTitle: (t) => setOptions((all) => Object.fromEntries([...Object.entries(all), ...selected.filter((c) => c.platform === "youtube").map((c) => [c.id, { ...ytOptions(all[c.id]), title: t }])])),
+                    } : undefined} />
                 )}
               </section>
 

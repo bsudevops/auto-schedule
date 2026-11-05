@@ -1,16 +1,18 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
+import { GeminiError, generateJson, geminiConfigured } from "@/lib/gemini";
 
 /**
- * Writing help in the composer, through the Claude API. Optional: without ANTHROPIC_API_KEY the
- * buttons are hidden. Each call returns up to three suggestions the person can insert or ignore;
+ * Writing help in the composer, through the Claude API, or Gemini when only GEMINI_API_KEY is set.
+ * Optional: with neither key the buttons are hidden. Each call returns up to three suggestions the person can insert or ignore;
  * nothing is ever posted without them choosing it.
  */
 export const AI_TASKS = ["draft", "improve", "shorter", "hashtags", "variants"] as const;
 export type AiTask = (typeof AI_TASKS)[number];
 
-export const aiConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+const claudeConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+export const aiConfigured = () => claudeConfigured() || geminiConfigured();
 const model = () => process.env.ANTHROPIC_MODEL?.trim() || "claude-opus-5-5";
 
 export class AiError extends Error {}
@@ -50,6 +52,20 @@ export async function writeWithAI(input: { task: AiTask; text: string; platforms
     input.text,
     "</text>",
   ].join("\n");
+
+  if (!claudeConfigured()) {
+    try {
+      const data = await generateJson({
+        system: SYSTEM,
+        parts: [{ text: user }],
+        schema: { type: "OBJECT", properties: { suggestions: { type: "ARRAY", items: { type: "STRING" } } }, required: ["suggestions"] },
+      });
+      return parseSuggestions(JSON.stringify(data), input.limit);
+    } catch (e) {
+      if (e instanceof GeminiError) throw new AiError(e.message);
+      throw e;
+    }
+  }
 
   let res: Anthropic.Beta.BetaMessage;
   try {

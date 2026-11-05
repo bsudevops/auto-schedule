@@ -1,10 +1,12 @@
 "use server";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
 import { channels, hashtagSets, mediaAssets, type Platform } from "@/db/schema";
 import { AI_TASKS, AiError, aiConfigured, writeWithAI } from "@/lib/ai";
+import { MAX_IMAGES, MediaAiError, writeFromMedia, type MediaSuggestions } from "@/lib/ai-media";
+import { geminiConfigured } from "@/lib/gemini";
 import { cleanTags } from "@/lib/hashtags";
 import { overLimit } from "@/lib/limits";
 import { UploadError } from "@/lib/media/pipeline";
@@ -41,6 +43,44 @@ export async function aiWriteAction(workspaceId: string, input: unknown): Promis
     if (e instanceof AiError) return { error: e.message };
     console.error("Writing help failed", e);
     return { error: "Writing help didn't work. Try again." };
+  }
+}
+
+const MediaAiInput = z.object({
+  mediaIds: z.array(z.string().uuid()).min(1, "Add an image or a video to the post first.").max(MAX_IMAGES + 10),
+  channelIds: z.array(z.string().uuid()).max(50),
+  notes: z.string().max(2000, "Those notes are too long.").default(""),
+});
+
+/** Writes captions, YouTube titles and hashtags from the post's media, with Gemini. */
+export async function aiFromMediaAction(workspaceId: string, input: unknown): Promise<MediaSuggestions | { error: string }> {
+  const { user } = await requireWorkspace(workspaceId, "create_posts");
+  if (!geminiConfigured()) return { error: "Writing from media isn't set up on this server. Add GEMINI_API_KEY to .env." };
+  const parsed = MediaAiInput.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the post and try again." };
+  if (await overLimit(`ai-media:${user.id}`, 20, 3600)) return { error: "You've used writing from media a lot this hour. Try again later." };
+
+  const { mediaIds, channelIds, notes } = parsed.data;
+  const rows = await db.select().from(mediaAssets).where(and(eq(mediaAssets.workspaceId, workspaceId), inArray(mediaAssets.id, mediaIds)));
+  const media = mediaIds.map((id) => rows.find((r) => r.id === id)).filter((r) => r != null);
+  if (!media.length) return { error: "Add an image or a video to the post first." };
+  const chans = channelIds.length
+    ? await db.select({ id: channels.id, platform: channels.platform }).from(channels).where(and(eq(channels.workspaceId, workspaceId), inArray(channels.id, channelIds)))
+    : [];
+  const platforms = [...new Set(chans.map((c) => c.platform as Platform))];
+  const limit = Math.min(3000, ...platforms.map((p) => PLATFORMS[p].captionLimit));
+  try {
+    return await writeFromMedia({
+      media: media.map((m) => ({ id: m.id, kind: m.kind, mimeType: m.mimeType, storageKey: m.storageKey, filename: m.filename, altText: m.altText, sizeBytes: m.sizeBytes })),
+      platforms: platforms.map((p) => PLATFORMS[p].name),
+      limit,
+      notes,
+      wantTitle: platforms.includes("youtube"),
+    });
+  } catch (e) {
+    if (e instanceof MediaAiError) return { error: e.message };
+    console.error("Writing from media failed", e);
+    return { error: "Writing from media didn't work. Try again." };
   }
 }
 
