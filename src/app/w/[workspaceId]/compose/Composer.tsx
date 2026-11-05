@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { deletePostAction, savePostAction } from "@/app/actions/posts";
 import { Icon } from "@/components/Icon";
 import { PlatformBadge, StatusPill } from "@/components/ui";
@@ -50,6 +50,8 @@ const EMOJI = ["💡", "🎉", "🔥", "✨", "❤️", "👏", "📣", "🙌", 
 export function Composer(props: ComposerProps) {
   const { workspaceId, timezone, canPublish, channels, queues, initial } = props;
   const [media, setMedia] = useState(props.media);
+  // A file uploaded from the media picker arrives in props.media after a refresh; keep it alongside anything added here.
+  useEffect(() => setMedia((cur) => [...props.media, ...cur.filter((c) => !props.media.some((p) => p.id === c.id))]), [props.media]);
   const [aiOpen, setAiOpen] = useState(false);
   const readonly = props.postStatus === "readonly" || props.postStatus === "published" || props.postStatus === "publishing";
   const router = useRouter();
@@ -200,7 +202,8 @@ export function Composer(props: ComposerProps) {
                 <YoutubeSettings key={c.id} workspaceId={workspaceId} channel={c} value={options[c.id]} caption={overrides[c.id] ?? caption}
                   onChange={(v) => setOptions((all) => ({ ...all, [c.id]: v }))}
                   onEditDescription={() => { setTab(c.id); requestAnimationFrame(() => { textRef.current?.focus(); textRef.current?.scrollIntoView({ block: "center" }); }); }}
-                  images={media.filter((m) => m.kind === "image")} video={chosenMedia.find((m) => m.kind === "video")} />
+                  images={media.filter((m) => m.kind === "image")} video={chosenMedia.find((m) => m.kind === "video")}
+                  onAddImage={(img) => setMedia((all) => [img, ...all.filter((x) => x.id !== img.id)])} />
               ))}
 
               <section className="card"><div className="card-b stack">

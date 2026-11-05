@@ -18,14 +18,28 @@ createServer(async (req, res) => {
   if (!file.startsWith(root + path.sep) || !type) return void res.writeHead(404).end();
   try {
     const s = await stat(file);
-    res.writeHead(200, {
+    const headers: Record<string, string | number> = {
       "Content-Type": type,
-      "Content-Length": s.size,
+      "Accept-Ranges": "bytes",
       "X-Content-Type-Options": "nosniff",
       "Content-Security-Policy": "default-src 'none'; sandbox",
       "Cache-Control": "public, max-age=3600",
       "Cross-Origin-Resource-Policy": "cross-origin",
-    });
+      // Lets the composer read video frames into a canvas (crossOrigin="anonymous") to make thumbnails.
+      "Access-Control-Allow-Origin": "*",
+    };
+    // Range requests, so browsers can seek in videos.
+    const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
+    if (range && (range[1] || range[2])) {
+      let start = range[1] ? Number(range[1]) : Math.max(0, s.size - Number(range[2]));
+      let end = range[1] && range[2] ? Math.min(Number(range[2]), s.size - 1) : s.size - 1;
+      if (start >= s.size || start > end) return void res.writeHead(416, { "Content-Range": `bytes */${s.size}` }).end();
+      start = Math.max(0, start);
+      end = Math.max(start, end);
+      res.writeHead(206, { ...headers, "Content-Range": `bytes ${start}-${end}/${s.size}`, "Content-Length": end - start + 1 });
+      return void createReadStream(file, { start, end }).pipe(res);
+    }
+    res.writeHead(200, { ...headers, "Content-Length": s.size });
     createReadStream(file).pipe(res);
   } catch {
     res.writeHead(404).end();
