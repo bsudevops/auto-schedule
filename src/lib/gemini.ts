@@ -39,8 +39,9 @@ async function call(url: string, init: RequestInit, what: string, attempts = 3) 
     try {
       res = await fetch(url, { ...init, headers: { "x-goog-api-key": key(), ...(init.headers ?? {}) }, signal: init.signal ?? AbortSignal.timeout(120_000) });
     } catch (e) {
-      console.error(`Gemini ${what} failed`, e);
-      const timedOut = (e as Error).name === "TimeoutError";
+      // AbortError: generateJson cancelled this model because another one answered, or its time ran out.
+      const timedOut = (e as Error).name === "TimeoutError" || (e as Error).name === "AbortError";
+      if ((e as Error).name !== "AbortError") console.error(`Gemini ${what} failed`, e);
       throw new GeminiError(`Couldn't reach Gemini (${timedOut ? "it took too long" : "network error"}). Try again.`, 0, false, timedOut);
     }
     if (res.ok) return res;
@@ -106,19 +107,23 @@ type Generated = {
   candidates?: { finishReason?: string; content?: { parts?: { text?: string }[] } }[];
 };
 
-/** Answers that mean "this model can't take it right now", where another model usually can. */
-const busy = (e: unknown) => e instanceof GeminiError && e.busy;
-
 let discovered: { at: number; models: string[] } | null = null;
 
-/** Picks backup models from the ones this key can use: other Flash models, the lighter ones first. */
+/**
+ * Picks backup models from the ones this key can use. Google's "-latest" Flash aliases come first because they
+ * point at whatever Flash model Google is serving best right now; then other Flash models, lighter and newer first.
+ */
 export function pickFallbacks(available: string[], primary: string): string[] {
   const usable = available
     .map((n) => n.replace(/^models\//, ""))
-    .filter((n) => /flash/i.test(n) && !/image|tts|audio|live|embed|thinking-exp|robotics|computer/i.test(n) && n !== primary);
+    .filter((n) => /flash/i.test(n) && !/image|tts|audio|live|embed|thinking-exp|robotics|computer|omni/i.test(n) && n !== primary);
   const version = (n: string) => Number(n.match(/gemini-(\d+(?:\.\d+)?)/)?.[1] ?? 0);
-  const score = (n: string) => (/preview|exp/i.test(n) ? 1 : 0) * 100 - version(n) - (/lite/i.test(n) ? 0.5 : 0);
-  return [...new Set(usable)].sort((a, b) => score(a) - score(b)).slice(0, 2);
+  const score = (n: string) => {
+    if (n === "gemini-flash-lite-latest") return -1000;
+    if (n === "gemini-flash-latest") return -999;
+    return (/preview|exp/i.test(n) ? 100 : 0) + (version(n) ? 0 : 50) - version(n) - (/lite/i.test(n) ? 0.5 : 0);
+  };
+  return [...new Set(usable)].sort((x, y) => score(x) - score(y)).slice(0, 3);
 }
 
 /** The model to use first, then backups for when it is overloaded: GEMINI_FALLBACK_MODELS, or found from the key's model list. */
@@ -138,33 +143,76 @@ export async function geminiModels(): Promise<string[]> {
   return [primary, ...discovered.models.filter((m) => m !== primary)];
 }
 
+/** How long a model gets before the next one is started alongside it. */
+export const HEDGE_MS = 12_000;
+
 /**
  * One generateContent call that must return JSON matching `schema` (an OpenAPI-style schema).
- * If the model is overloaded it moves straight on to a backup model instead of waiting, and the whole call
- * gives up after `budgetMs` so nobody watches a spinner for minutes.
+ * Overloaded Gemini models often hang for a long time instead of failing, so this doesn't wait on one model:
+ * it starts the main model, and if there's no answer within HEDGE_MS, or it fails as busy, it starts the next
+ * one too. The first good answer wins and the rest are cancelled. Everything stops after `budgetMs`.
  */
-export async function generateJson(input: { system: string; parts: GeminiPart[]; schema: Record<string, unknown>; video?: boolean; budgetMs?: number }): Promise<unknown> {
+export async function generateJson(input: { system: string; parts: GeminiPart[]; schema: Record<string, unknown>; video?: boolean; budgetMs?: number; hedgeMs?: number }): Promise<unknown> {
   const models = await geminiModels();
-  const until = Date.now() + (input.budgetMs ?? 90_000);
-  let lastBusy: GeminiError | null = null;
-  for (const [i, m] of models.entries()) {
-    const left = until - Date.now();
-    if (left < 5_000) break;
-    // The first model gets most of the time; backups share what is left.
-    const timeout = Math.floor(i === models.length - 1 ? left : Math.min(left, Math.max(30_000, left * 0.6)));
-    try {
-      return await generateWith(m, input, timeout, models.length === 1 ? 2 : 1);
-    } catch (e) {
-      if (!busy(e) && !(e instanceof GeminiError && e.timedOut)) throw e;
-      console.warn(`Gemini ${m} is busy, trying the next model`, (e as Error).message);
-      lastBusy = e as GeminiError;
-    }
+  const budget = Math.floor(input.budgetMs ?? 90_000);
+  const hedge = input.hedgeMs ?? HEDGE_MS;
+  const stop = new AbortController();
+  const deadline = setTimeout(() => stop.abort(), budget);
+  const errors: GeminiError[] = [];
+  try {
+    return await new Promise<unknown>((resolve, reject) => {
+      let next = 0;
+      let running = 0;
+      let done = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const finish = () => {
+        if (done || running > 0 || next < models.length) return;
+        done = true;
+        if (errors.length && errors.every((e) => e.timedOut)) reject(new GeminiError("Gemini took too long to answer. Try again in a minute."));
+        else reject(new GeminiError(models.length > 1 ? "Gemini is overloaded on every model right now. Try again in a minute." : "Gemini is overloaded right now. Try again in a minute."));
+      };
+      const launch = () => {
+        clearTimeout(timer);
+        if (done || next >= models.length || stop.signal.aborted) return finish();
+        const m = models[next++]!;
+        running++;
+        generateWith(m, input, stop.signal, models.length === 1 ? 2 : 1).then(
+          (data) => {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            stop.abort(); // cancel the models still working
+            resolve(data);
+          },
+          (e) => {
+            running--;
+            if (done) return;
+            if (!(e instanceof GeminiError) || (!e.busy && !e.timedOut)) {
+              done = true;
+              clearTimeout(timer);
+              stop.abort();
+              return reject(e);
+            }
+            console.warn(`Gemini ${m} is busy or slow, trying the next model:`, e.message);
+            errors.push(e);
+            if (stop.signal.aborted) { next = models.length; return finish(); }
+            launch();
+          },
+        );
+        if (next < models.length) timer = setTimeout(launch, hedge);
+      };
+      stop.signal.addEventListener("abort", () => {
+        clearTimeout(timer);
+        next = models.length;
+      });
+      launch();
+    });
+  } finally {
+    clearTimeout(deadline);
   }
-  if (lastBusy?.timedOut) throw new GeminiError("Gemini took too long to answer. Try again in a minute.");
-  throw new GeminiError(models.length > 1 ? "Gemini is overloaded on every model right now. Try again in a minute." : "Gemini is overloaded right now. Try again in a minute.");
 }
 
-async function generateWith(model: string, input: { system: string; parts: GeminiPart[]; schema: Record<string, unknown>; video?: boolean }, timeoutMs: number, attempts: number) {
+async function generateWith(model: string, input: { system: string; parts: GeminiPart[]; schema: Record<string, unknown>; video?: boolean }, signal: AbortSignal, attempts: number) {
   const config: Record<string, unknown> = { responseMimeType: "application/json", responseSchema: input.schema, temperature: 0.9 };
   // Low resolution reads a video with about a quarter of the tokens, which is plenty for a caption and much faster.
   if (input.video) config.mediaResolution = "MEDIA_RESOLUTION_LOW";
@@ -179,7 +227,7 @@ async function generateWith(model: string, input: { system: string; parts: Gemin
         contents: [{ role: "user", parts: input.parts }],
         generationConfig,
       }),
-      signal: AbortSignal.timeout(Math.max(1, Math.floor(timeoutMs))),
+      signal,
     }, "generate", attempts);
   let res: Response;
   try {
