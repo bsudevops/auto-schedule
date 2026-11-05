@@ -29,7 +29,7 @@ createServer(async (req, res) => {
     if (busy && model === "gemini-3.8-flash") return json(503, { error: { code: 503, message: "This model is currently experiencing high demand.", status: "UNAVAILABLE" } });
     const parsed = JSON.parse(body.toString());
     const parts = parsed.contents[0].parts;
-    last = { model, config: parsed.generationConfig, kinds: parts.map((p) => Object.keys(p)[0]), text: parts.at(-1).text };
+    last = { model, config: parsed.generationConfig, fps: parts[0]?.video_metadata?.fps, kinds: parts.map((p) => Object.keys(p)[0]), text: parts.at(-1).text };
     const wantTitle = /Also write 3 YouTube titles/.test(last.text);
     const answer = {
       captions: ["Fresh from the roaster: our cold brew is back for the season.", "Slow-steeped for 18 hours, poured over ice."],
