@@ -9,7 +9,7 @@ import "server-only";
 const API = (process.env.GEMINI_BASE_URL?.trim() || "https://generativelanguage.googleapis.com").replace(/\/$/, "");
 
 export const geminiConfigured = () => Boolean(process.env.GEMINI_API_KEY?.trim());
-export const geminiModel = () => process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+export const geminiModel = () => process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
 
 export class GeminiError extends Error {}
 
@@ -17,16 +17,42 @@ export type GeminiPart = { text: string } | { inline_data: { mime_type: string; 
 
 const key = () => process.env.GEMINI_API_KEY!.trim();
 
+/** Google's own error text, e.g. "Request contains an invalid argument." */
+function googleMessage(body: string) {
+  try {
+    const m = (JSON.parse(body) as { error?: { message?: string } }).error?.message;
+    return m ? m.replace(/\s+/g, " ").slice(0, 200) : "";
+  } catch {
+    return "";
+  }
+}
+
 async function call(url: string, init: RequestInit, what: string) {
-  const res = await fetch(url, { ...init, headers: { "x-goog-api-key": key(), ...(init.headers ?? {}) }, signal: init.signal ?? AbortSignal.timeout(120_000) });
-  if (res.ok) return res;
-  const body = await res.text().catch(() => "");
-  if (res.status === 400 && /API key not valid|API_KEY_INVALID/i.test(body)) throw new GeminiError("The Gemini API key on the server was rejected.");
-  if (res.status === 401 || res.status === 403) throw new GeminiError("The Gemini API key on the server was rejected.");
-  if (res.status === 429) throw new GeminiError("Gemini is busy or the free quota is used up. Try again in a minute.");
-  if (res.status === 413) throw new GeminiError("That file is too big for Gemini.");
-  console.error(`Gemini ${what} failed`, res.status, body.slice(0, 500));
-  throw new GeminiError("Gemini didn't respond. Try again.");
+  // Google answers 500 and 503 ("the model is overloaded") now and then; two quick retries usually get through.
+  for (let attempt = 1; ; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(url, { ...init, headers: { "x-goog-api-key": key(), ...(init.headers ?? {}) }, signal: init.signal ?? AbortSignal.timeout(120_000) });
+    } catch (e) {
+      console.error(`Gemini ${what} failed`, e);
+      throw new GeminiError(`Couldn't reach Gemini (${(e as Error).name === "TimeoutError" ? "it took too long" : "network error"}). Try again.`);
+    }
+    if (res.ok) return res;
+    const body = await res.text().catch(() => "");
+    const retryable = (res.status === 500 || res.status === 503) && (what === "generate" || init.method === "GET");
+    if (retryable && attempt < 3) {
+      await new Promise((r) => setTimeout(r, 1500 * attempt));
+      continue;
+    }
+    const msg = googleMessage(body);
+    console.error(`Gemini ${what} failed`, res.status, body.slice(0, 500));
+    if (res.status === 400 && /API key not valid|API_KEY_INVALID/i.test(body)) throw new GeminiError("The Gemini API key on the server was rejected.");
+    if (res.status === 401 || res.status === 403) throw new GeminiError(`The Gemini API key on the server was refused${msg ? `: ${msg}` : "."}`);
+    if (res.status === 429) throw new GeminiError("Gemini is busy or the free quota is used up. Try again in a minute.");
+    if (res.status === 413) throw new GeminiError("That file is too big for Gemini.");
+    if (res.status === 503) throw new GeminiError("Gemini is overloaded right now. Try again in a minute.");
+    throw new GeminiError(`Gemini couldn't do it (${what}, ${res.status})${msg ? `: ${msg}` : "."}`);
+  }
 }
 
 /** Uploads a file through the Files API and waits until Gemini has processed it (videos take a few seconds). */
