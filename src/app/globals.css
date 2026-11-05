@@ -3,6 +3,9 @@
  * nav: kept · signature: the four-stage idea pipeline · states: empty, dragging, adding, error
  * axes: pale-blue/geometric-sans/sky · posture: board · contrast: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: stages read left to right with one colour each; weakest: per-card controls, now quiet until hover with the stage picker in the footer */
+/* Hallmark · redesign: full (Overview screen) · shape: app screen · theme: brand (kept) · signature: the next seven days, one column per day with a + to fill it
+ * states: alerts only when something needs you; empty days read "Nothing yet"; channels, results and activity keep their empty states
+ * critique: the first draft hid every logo in the week strip to save space; a schedule you scan by channel needs them, so each post shows its logos beside the time */
 @import "tailwindcss";
 
 /* Design tokens. Light blue and white, from the approved prototype. */
@@ -18,6 +21,8 @@
   --r:10px; --r-lg:14px;
   --shadow:0 1px 2px rgba(20,60,120,.06), 0 4px 16px rgba(20,60,120,.06);
   --shadow-lg:0 10px 40px rgba(14,34,64,.18);
+  --on-accent:#FAFCFF; --shadow-lift:0 3px 10px rgba(20,60,120,.14);
+  --ig-gradient:radial-gradient(circle at 30% 107%,#fdf497 0%,#fdf497 5%,#fd5949 45%,#d6249f 60%,#285AEB 90%);
 }
 
 @theme inline {
@@ -140,8 +145,11 @@ textarea.input{resize:vertical;min-height:90px;line-height:1.55}
 .s-failed{background:var(--bad-50);color:var(--bad)}
 .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:99px;font-size:12.5px;background:var(--panel);font-weight:500}
 .chip.on{border-color:var(--sky);background:var(--sky-50);color:var(--sky-deep)}
-.pf{width:22px;height:22px;border-radius:6px;display:inline-grid;place-items:center;color:#fff;font-size:9.5px;font-weight:700;flex:none;letter-spacing:-.02em}
+.pf{width:22px;height:22px;border-radius:6px;display:inline-grid;place-items:center;color:var(--on-accent);font-size:9.5px;font-weight:700;flex:none;letter-spacing:-.02em}
 .pf.lg{width:34px;height:34px;border-radius:9px;font-size:13px}
+.pf.xs{width:15px;height:15px;border-radius:4px;vertical-align:-3px}
+.pf svg{width:62%;height:62%;fill:var(--on-accent);display:block}
+.pf[data-platform="instagram"]{background:var(--ig-gradient)!important}
 .pfs{display:inline-flex}
 .pfs .pf{border:2px solid var(--panel);margin-left:-5px}
 .pfs .pf:first-child{margin-left:0}
@@ -433,3 +441,76 @@ table.tbl{width:100%;border-collapse:collapse}
 .activity time{display:block;color:var(--muted);font-size:12px}
 
 .portal-wrap{margin:0 auto;padding:32px 20px 64px;display:flex;flex-direction:column;gap:22px;width:100%}
+
+/* YouTube thumbnail choice: three option tiles, then one large preview once chosen. */
+.thumb-opts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:480px}
+.thumb-opt{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;aspect-ratio:16/9;min-height:84px;padding:8px;border:1.5px dashed var(--line);border-radius:var(--r);background:var(--panel);color:var(--ink-2);text-align:center;transition:background-color 120ms ease,border-color 120ms ease,color 120ms ease}
+.thumb-opt b{font-size:12.5px;font-weight:600}
+.thumb-opt small{font-size:11px;color:var(--muted)}
+.thumb-opt:hover{border-color:var(--sky);background:var(--sky-50);color:var(--sky-deep)}
+.thumb-opt.on{border-style:solid;border-color:var(--sky);background:var(--sky-50);color:var(--sky-deep)}
+.thumb-chosen{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.thumb-chosen img{width:320px;max-width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:var(--r);border:2px solid var(--sky)}
+
+/* Calendar: blue hover on days and hours, a + to create a post there, and a lift on post chips. */
+.cal .day,.week .cell{position:relative;transition:background-color 140ms ease,box-shadow 140ms ease}
+.cal .day:hover,.week .cell:hover,.week .cell.drag{background:var(--sky-50);box-shadow:inset 0 0 0 1.5px var(--sky-200)}
+.cal .day.out:hover{background:var(--sky-50)}
+.day-h{display:flex;align-items:center;justify-content:space-between;gap:4px;min-height:26px}
+.day-add{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:8px;background:var(--sky);color:var(--on-accent);opacity:.3;transform:scale(.85);transition:opacity 140ms ease,transform 140ms ease,background-color 140ms ease;text-decoration:none}
+.week .cell .day-add{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:6px}
+.cal .day:hover .day-add,.week .cell:hover .day-add,.day-add:focus-visible{opacity:1;transform:scale(1)}
+.day-add:hover{background:var(--sky-deep)}
+@media (hover:none){.day-add{opacity:1;transform:none}}
+.ev{transition:transform 140ms ease,box-shadow 140ms ease}
+.ev:hover{transform:translateY(-1px);box-shadow:var(--shadow-lift)}
+@media (prefers-reduced-motion:reduce){.ev,.day-add,.cal .day,.week .cell{transition:none}.ev:hover{transform:none}}
+
+/* Overview: alerts only when something needs you, one stats strip, the week ahead as the lead, then results, channels and team. */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.ov{display:flex;flex-direction:column;gap:16px}
+.ov .page-head{margin-bottom:0}
+.ov-alerts{display:flex;flex-direction:column;gap:8px}
+.ov-alert{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:var(--r);border:1px solid var(--line);background:var(--panel);font-size:13.5px}
+.ov-alert .grow{flex:1;min-width:0}
+.ov-alert.bad{border-color:var(--bad);background:var(--bad-50);color:var(--bad)}
+.ov-alert.warn{border-color:var(--warn);background:var(--warn-50);color:var(--warn)}
+.ov-alert.info{border-color:var(--sky-200);background:var(--sky-50);color:var(--sky-deep)}
+.ov-alert b{color:var(--ink);font-weight:600}
+.ov-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:0}
+.ov-stat{padding:14px 18px;border-left:1px solid var(--line-2);min-width:0}
+.ov-stat:first-child{border-left:0}
+.ov-stat .v{font-family:var(--f-display);font-size:26px;font-weight:600;line-height:1.1}
+.ov-stat .label{text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:500;margin-top:2px}
+.ov-grid{display:grid;gap:16px;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);grid-template-areas:"week week" "recent channels" "recent activity";align-items:start}
+.ov-week{grid-area:week}.ov-recent{grid-area:recent}.ov-channels{grid-area:channels}.ov-activity{grid-area:activity}
+.ov-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-top:1px solid var(--line-2)}
+.ov-day{display:flex;flex-direction:column;gap:6px;min-width:0;min-height:150px;padding:10px;border-left:1px solid var(--line-2);transition:background-color 140ms ease,box-shadow 140ms ease}
+.ov-day:first-child{border-left:0}
+.ov-day:hover{background:var(--sky-50);box-shadow:inset 0 0 0 1.5px var(--sky-200)}
+.ov-day:hover .day-add{opacity:1;transform:scale(1)}
+.ov-day.today .ov-day-h b{color:var(--sky-deep)}
+.ov-day-h{display:flex;align-items:center;justify-content:space-between;gap:4px;min-height:26px;font-size:13px}
+.ov-post{display:flex;flex-direction:column;gap:3px;padding:7px 8px;border-radius:8px;background:var(--sky-50);border-left:3px solid var(--sky);text-decoration:none;color:inherit;min-width:0;transition:transform 140ms ease,box-shadow 140ms ease}
+.ov-post:hover{transform:translateY(-1px);box-shadow:var(--shadow-lift)}
+.ov-post .tm{font-family:var(--f-mono);font-size:10.5px;color:var(--muted)}
+.ov-post .tt{font-size:12.5px;font-weight:500;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+.ov-post .tm{display:flex;align-items:center;gap:6px}
+.ov-free{font-size:12px;color:var(--muted)}
+.ov-ch-n{display:flex;flex-direction:column;align-items:flex-end;font-size:12px;color:var(--muted);white-space:nowrap}
+.ov-ch-n b{color:var(--ink)}
+.ov-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.ov-tile{display:flex;flex-direction:column;gap:8px;min-width:0}
+.ov-cover{position:relative;display:block;aspect-ratio:16/9;border-radius:var(--r);overflow:hidden;background:var(--sky-50);border:1px solid var(--line)}
+.ov-cover img,.ov-cover video{width:100%;height:100%;object-fit:cover;display:block;transition:transform 200ms ease}
+.ov-cover:hover img,.ov-cover:hover video{transform:scale(1.03)}
+.ov-cover-text{display:flex;align-items:center;justify-content:center;height:100%;padding:12px;text-align:center;font-family:var(--f-display);font-weight:600;color:var(--ink-2);overflow-wrap:anywhere}
+.ov-cover-pf{position:absolute;left:8px;bottom:8px}
+.ov-tile-b{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ov-tile-b .t{font-weight:600;color:var(--ink);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ov-tile-b .t:hover{color:var(--sky-deep)}
+.ov-tile-b .s{font-size:12px;color:var(--muted)}
+.ov-live{font-size:12.5px;font-weight:600;margin-top:2px}
+@media (max-width:1100px){.ov-grid{grid-template-columns:minmax(0,1fr);grid-template-areas:"week" "recent" "channels" "activity"}.ov-days{grid-template-columns:repeat(4,minmax(0,1fr))}.ov-day:nth-child(5){border-left:0}.ov-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:640px){.ov-days{grid-template-columns:minmax(0,1fr)}.ov-day{border-left:0;border-top:1px solid var(--line-2);min-height:0}.ov-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.ov-tiles{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion:reduce){.ov-day,.ov-post,.ov-cover img,.ov-cover video{transition:none}.ov-post:hover,.ov-cover:hover img,.ov-cover:hover video{transform:none}}

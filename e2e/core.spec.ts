@@ -279,11 +279,11 @@ test("a YouTube thumbnail can be dropped in or taken from a frame of the video",
   await expect(panel.getByAltText("Chosen thumbnail")).toBeVisible({ timeout: 30_000 });
   await expect(panel.getByText("Using cover-thumbnail.jpg")).toBeVisible();
 
-  // Then swap it for a suggested frame from the video.
-  await panel.getByRole("button", { name: "Use suggested frame 2" }).click({ timeout: 30_000 });
-  await expect(panel.getByText(/Using frame-1\.\ds\.jpg/)).toBeVisible({ timeout: 30_000 });
+  // Once chosen, only the preview shows; Change brings the options back.
+  await expect(panel.getByRole("button", { name: "Upload a thumbnail" })).toBeHidden();
+  await panel.getByRole("button", { name: "Change" }).click();
 
-  // And for a frame picked in the player.
+  // Swap it for a frame picked in the player.
   await panel.getByRole("button", { name: "Pick a frame from the video" }).click();
   const player = panel.getByLabel("Video to pick a frame from");
   await player.evaluate((v: HTMLVideoElement) => new Promise<void>((ok) => { const go = () => { v.addEventListener("seeked", () => ok(), { once: true }); v.currentTime = 2.5; }; if (v.readyState >= 2) go(); else v.addEventListener("loadeddata", go, { once: true }); }));
