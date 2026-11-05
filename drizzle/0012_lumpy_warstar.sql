@@ -1,0 +1,1 @@
+ALTER TABLE "post_targets" ADD COLUMN "removed_dismissed_at" timestamp with time zone;

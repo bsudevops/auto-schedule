@@ -13,6 +13,7 @@ import { thumbKey } from "@/lib/media/service";
 import { can } from "@/lib/permissions";
 import { PLATFORMS } from "@/lib/platforms";
 import { requireWorkspace } from "@/lib/session";
+import { DismissAlertButton } from "./DismissAlertButton";
 
 export const metadata = { title: "Overview" };
 
@@ -35,7 +36,7 @@ export default async function Overview({ params }: { params: Promise<{ workspace
       .where(and(ws, eq(postTargets.status, "failed"))).orderBy(desc(posts.scheduledAt)).limit(3),
     db.select({ id: posts.id, caption: posts.caption, reason: postTargets.removedReason, platform: channels.platform })
       .from(postTargets).innerJoin(posts, eq(posts.id, postTargets.postId)).innerJoin(channels, eq(channels.id, postTargets.channelId))
-      .where(and(ws, isNotNull(postTargets.removedAt), gte(postTargets.removedAt, ago30))).orderBy(desc(postTargets.removedAt)).limit(3),
+      .where(and(ws, isNotNull(postTargets.removedAt), isNull(postTargets.removedDismissedAt), gte(postTargets.removedAt, ago30))).orderBy(desc(postTargets.removedAt)).limit(3),
     db.select({ id: posts.id, caption: posts.caption, at: posts.publishedAt })
       .from(posts).where(and(ws, eq(posts.status, "published"))).orderBy(desc(posts.publishedAt)).limit(4),
     db.select().from(channels).where(and(eq(channels.workspaceId, workspaceId), inArray(channels.status, ["connected", "expiring", "reconnect"]))).orderBy(asc(channels.platform)),
@@ -67,7 +68,7 @@ export default async function Overview({ params }: { params: Promise<{ workspace
 
   const attention = [
     ...failed.map((f) => ({ key: `f${f.id}${f.platform}`, tone: "bad" as const, title: `“${title(f.caption)}” failed on ${PLATFORMS[f.platform].name}`, body: f.error ?? "The platform rejected the post.", href: `${base}/calendar`, cta: "Review" })),
-    ...removedPosts.map((r) => ({ key: `r${r.id}${r.platform}`, tone: "bad" as const, title: `“${title(r.caption)}” is no longer on ${PLATFORMS[r.platform].name}`, body: r.reason ?? "The platform no longer has this post.", href: `${base}/posts/${r.id}`, cta: "View post" })),
+    ...removedPosts.map((r) => ({ key: `r${r.id}${r.platform}`, tone: "bad" as const, title: `“${title(r.caption)}” is no longer on ${PLATFORMS[r.platform].name}`, body: r.reason ?? "The platform no longer has this post.", href: `${base}/posts/${r.id}`, cta: "View post", dismiss: r.id })),
     ...chans.filter((c) => c.status !== "connected").map((c) => ({
       key: c.id, tone: c.status === "reconnect" ? ("bad" as const) : ("warn" as const),
       title: c.status === "reconnect" ? `${PLATFORMS[c.platform].name} needs reconnecting` : `${PLATFORMS[c.platform].name} connection expires soon`,
@@ -117,9 +118,10 @@ export default async function Overview({ params }: { params: Promise<{ workspace
           <h2 id="ov-attention" className="sr-only">Needs attention</h2>
           {attention.map((a) => (
             <div className={`ov-alert ${a.tone}`} key={a.key}>
-              <Icon name={a.tone === "info" ? "inbox" : a.tone === "warn" ? "clock" : "x"} size={16} />
+              <Icon name={a.tone === "info" ? "inbox" : a.tone === "warn" ? "clock" : "dismiss" in a ? "trash" : "refresh"} size={16} />
               <div className="grow"><b>{a.title}</b> <span className="muted">{a.body}</span></div>
               <Link className="btn sm" href={a.href}>{a.cta}</Link>
+              {"dismiss" in a && typeof a.dismiss === "string" && <DismissAlertButton workspaceId={workspaceId} postId={a.dismiss} />}
             </div>
           ))}
         </section>

@@ -563,3 +563,6 @@ table.tbl{width:100%;border-collapse:collapse}
 @media (max-width:1000px){.pd-grid{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:640px){.pd-title h1{font-size:20px}.pd-actions{width:100%}.pd-actions>*{flex:1 1 auto;justify-content:center}}
 @media (prefers-reduced-motion:reduce){.pd *{transition:none!important;animation:none!important}}
+.ov-dismiss{width:32px;height:32px;flex:none;color:var(--muted)}
+.ov-dismiss:hover{color:var(--bad)}
+.ov-dismiss:focus-visible{outline:2px solid var(--sky);outline-offset:2px}

@@ -1,8 +1,8 @@
 "use server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
-import { posts } from "@/db/schema";
+import { postTargets, posts } from "@/db/schema";
 import { checkPostRemovals } from "@/lib/publishing/sync";
 import { deletePost, reschedulePost, retryFailed, savePost } from "@/lib/posts";
 import { zonedToUtc } from "@/lib/queue-slots";
@@ -54,4 +54,15 @@ export async function checkPostOnPlatformsAction(workspaceId: string, postId: st
   } catch (e) {
     return { ok: false as const, error: `Couldn't check right now: ${(e as Error).message}` };
   }
+}
+
+/** Hides the Overview alert for a post deleted on a platform. The post stays marked on the calendar and its page. */
+export async function dismissRemovedAlertAction(workspaceId: string, postId: string) {
+  const { workspace } = await requireWorkspace(workspaceId);
+  if (!/^[0-9a-f-]{36}$/i.test(postId)) return { ok: false as const };
+  const [p] = await db.select({ id: posts.id }).from(posts).where(and(eq(posts.id, postId), eq(posts.workspaceId, workspace.id)));
+  if (!p) return { ok: false as const };
+  await db.update(postTargets).set({ removedDismissedAt: new Date() }).where(and(eq(postTargets.postId, p.id), isNotNull(postTargets.removedAt)));
+  revalidatePath(`/w/${workspaceId}`, "layout");
+  return { ok: true as const };
 }
