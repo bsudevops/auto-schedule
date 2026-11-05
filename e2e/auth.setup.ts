@@ -3,6 +3,6 @@ import { STATE, signInWithForm } from "./helpers";
 
 setup("sign in once", async ({ page }) => {
   await signInWithForm(page);
-  await page.waitForURL(/\/w\//);
+  await page.waitForURL(/\/organization/);
   await page.context().storageState({ path: STATE });
 });

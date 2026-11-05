@@ -19,15 +19,32 @@ export async function createOrganization(_: FormState, form: FormData): Promise<
   const user = await requireUser();
   const parsed = onboardingInput.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: first(parsed.error) };
-  const { orgName, name, timezone, color } = parsed.data;
-  const wsId = await db.transaction(async (tx) => {
-    const [org] = await tx.insert(organizations).values({ name: orgName }).returning({ id: organizations.id });
+  await db.transaction(async (tx) => {
+    const [org] = await tx.insert(organizations).values({ name: parsed.data.orgName }).returning({ id: organizations.id });
     await tx.insert(orgMembers).values({ orgId: org!.id, userId: user.id, role: "owner" });
-    const [ws] = await tx.insert(workspaces).values({ orgId: org!.id, name, timezone, color }).returning({ id: workspaces.id });
+  });
+  // Workspaces (one per brand or client) are created from the organization page.
+  redirect("/organization");
+}
+
+/** Adds a workspace to an organization from the organization page. Only the organization's owners and admins can. */
+export async function createWorkspaceInOrg(orgId: string, _: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const [row] = await db
+    .select({ role: orgMembers.role, deletionRequestedAt: organizations.deletionRequestedAt })
+    .from(orgMembers)
+    .innerJoin(organizations, eq(organizations.id, orgMembers.orgId))
+    .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, user.id)));
+  if (!row || row.role === "member") return { error: "Only organization owners and admins can add workspaces." };
+  if (row.deletionRequestedAt) return { error: "This organization is scheduled for deletion." };
+  const parsed = workspaceInput.safeParse(Object.fromEntries(form));
+  if (!parsed.success) return { error: first(parsed.error) };
+  const id = await db.transaction(async (tx) => {
+    const [ws] = await tx.insert(workspaces).values({ orgId, ...parsed.data }).returning({ id: workspaces.id });
     await tx.insert(workspaceMembers).values({ workspaceId: ws!.id, userId: user.id, role: "owner" });
     return ws!.id;
   });
-  redirect(`/w/${wsId}`);
+  redirect(`/w/${id}`);
 }
 
 /** Adds another workspace to the same organization. Only organization owners and admins can do this. */

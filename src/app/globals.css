@@ -431,3 +431,5 @@ table.tbl{width:100%;border-collapse:collapse}
 .activity .what{flex:1;min-width:0;font-size:13.5px;line-height:1.45}
 .activity .what a{color:inherit}
 .activity time{display:block;color:var(--muted);font-size:12px}
+
+.portal-wrap{margin:0 auto;padding:32px 20px 64px;display:flex;flex-direction:column;gap:22px;width:100%}

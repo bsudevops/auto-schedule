@@ -20,7 +20,7 @@ export const workspaceSettingsInput = workspaceInput.extend({
     .pipe(z.array(z.string().max(300, "Keep each saved reply under 300 characters.")).max(12, "Keep to 12 saved replies or fewer.")),
 });
 
-export const onboardingInput = workspaceInput.extend({
+export const onboardingInput = z.object({
   orgName: z.string().trim().min(1, "Enter your company or agency name.").max(80),
 });
 
