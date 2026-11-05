@@ -31,6 +31,8 @@ export default defineConfig({
   ],
   webServer: [
     { command: `npx next start -p ${PORT}`, url: `http://localhost:${PORT}/api/health`, timeout: 60_000, reuseExistingServer: !process.env.CI, env },
+    // Serves uploaded files, so tests can play videos and read their frames.
+    { command: "npm run media", port: 3001, timeout: 30_000, reuseExistingServer: true },
     ...(cron ? [] : [{ command: "npm run worker", wait: { stdout: /Worker ready/ }, timeout: 60_000, reuseExistingServer: false, env }]),
   ],
 });

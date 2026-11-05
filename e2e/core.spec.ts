@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { go, openWorkspace, signInWithForm } from "./helpers";
 
@@ -247,4 +248,51 @@ test("YouTube settings are saved with the post", async ({ page }) => {
   await again.getByRole("button", { name: "Show more" }).click();
   await expect(again.getByLabel("Paid promotion")).toBeChecked();
   await expect(again.getByLabel("Video language")).toHaveValue("ml");
+});
+
+test("a YouTube thumbnail can be dropped in or taken from a frame of the video", async ({ page }) => {
+  const base = await openWorkspace(page);
+  await go(page, `${base}/compose`);
+  for (const name of ["Instagram", "Facebook", "LinkedIn"]) {
+    const chip = page.locator("button.chip", { hasText: name }).first();
+    if ((await chip.getAttribute("class"))?.includes("on")) await chip.click();
+  }
+  const yt = page.locator("button.chip", { hasText: "YouTube" }).first();
+  if (!(await yt.getAttribute("class"))?.includes("on")) await yt.click();
+  const caption = `Thumbnail test ${Date.now()}`;
+  await page.locator("textarea").first().fill(caption);
+
+  // Attach a video through the media picker.
+  await page.getByRole("button", { name: "Add media" }).first().click();
+  await page.getByRole("dialog", { name: "Add media" }).locator('input[type="file"]').setInputFiles("e2e/fixtures/clip.webm");
+  await expect(page.getByRole("dialog", { name: "Add media" })).toBeHidden({ timeout: 30_000 });
+  const panel = page.getByRole("region", { name: /YouTube settings/ });
+
+  // Drag and drop an image.
+  const drop = await page.evaluateHandle(() => new DataTransfer());
+  const png = readFileSync("e2e/fixtures/thumb.png").toString("base64");
+  await page.evaluate(({ dt, png }) => {
+    const bytes = Uint8Array.from(atob(png), (c) => c.charCodeAt(0));
+    dt.items.add(new File([bytes], "cover.png", { type: "image/png" }));
+  }, { dt: drop, png });
+  await panel.getByRole("button", { name: "Upload a thumbnail" }).dispatchEvent("drop", { dataTransfer: drop });
+  await expect(panel.getByAltText("Chosen thumbnail")).toBeVisible({ timeout: 30_000 });
+  await expect(panel.getByText("Using cover-thumbnail.jpg")).toBeVisible();
+
+  // Then swap it for a suggested frame from the video.
+  await panel.getByRole("button", { name: "Use suggested frame 2" }).click({ timeout: 30_000 });
+  await expect(panel.getByText(/Using frame-1\.\ds\.jpg/)).toBeVisible({ timeout: 30_000 });
+
+  // And for a frame picked in the player.
+  await panel.getByRole("button", { name: "Pick a frame from the video" }).click();
+  const player = panel.getByLabel("Video to pick a frame from");
+  await player.evaluate((v: HTMLVideoElement) => new Promise<void>((ok) => { const go = () => { v.addEventListener("seeked", () => ok(), { once: true }); v.currentTime = 2.5; }; if (v.readyState >= 2) go(); else v.addEventListener("loadeddata", go, { once: true }); }));
+  await panel.getByRole("button", { name: "Use this frame" }).click();
+  await expect(panel.getByText("Using frame-2.5s.jpg")).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await page.waitForURL(/calendar/);
+  await go(page, `${base}/search?q=${encodeURIComponent(caption)}`);
+  await page.getByRole("link", { name: caption }).first().click();
+  await expect(page.getByRole("region", { name: /YouTube settings/ }).getByText("Using frame-2.5s.jpg")).toBeVisible();
 });

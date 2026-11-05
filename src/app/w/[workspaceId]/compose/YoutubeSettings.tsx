@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import { PlatformBadge } from "@/components/ui";
+import { ThumbnailPicker, type ThumbImage } from "./ThumbnailPicker";
 import { YT_CATEGORIES, YT_LANGUAGES, defaultYoutubeOptions, isShort, youtubeTitle, type YoutubeOptions } from "@/lib/youtube-options";
 
-type Img = { id: string; kind: "image" | "video"; filename: string; thumb: string };
-type Vid = { width?: number | null; height?: number | null; durationMs?: number | null };
+type Vid = { url?: string; width?: number | null; height?: number | null; durationMs?: number | null };
 
 /** Fills in defaults for settings saved before a field existed. */
 export function ytOptions(raw: Record<string, unknown> | undefined): YoutubeOptions {
@@ -22,7 +22,8 @@ export function YoutubeSettings(props: {
   onChange: (v: YoutubeOptions) => void;
   caption: string;
   onEditDescription: () => void;
-  images: Img[];
+  images: ThumbImage[];
+  onAddImage: (img: ThumbImage) => void;
   video: Vid | undefined;
 }) {
   const o = ytOptions(props.value);
@@ -49,7 +50,6 @@ export function YoutubeSettings(props: {
 
   const tagChars = o.tags.join(",").length;
   const short = props.video && isShort({ width: props.video.width ?? null, height: props.video.height ?? null, durationMs: props.video.durationMs ?? null });
-  const thumb = props.images.find((m) => m.id === o.thumbnailAssetId);
 
   return (
     <section className="card" aria-label={`YouTube settings for ${props.channel.handle}`}>
@@ -68,18 +68,8 @@ export function YoutubeSettings(props: {
           <button type="button" className="btn ghost sm" style={{ alignSelf: "flex-start" }} onClick={props.onEditDescription}>Edit the YouTube description</button>
         </div>
 
-        <div className="field"><span>Thumbnail</span>
-          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <button type="button" className={`chip${!o.thumbnailAssetId ? " on" : ""}`} aria-pressed={!o.thumbnailAssetId} onClick={() => set({ thumbnailAssetId: null })}>Auto-generated</button>
-            {props.images.slice(0, 12).map((m) => (
-              <button type="button" key={m.id} className={`chip${o.thumbnailAssetId === m.id ? " on" : ""}`} aria-pressed={o.thumbnailAssetId === m.id} title={m.filename} onClick={() => set({ thumbnailAssetId: m.id })} style={{ padding: 2 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={m.thumb} alt={m.filename} style={{ width: 64, height: 36, objectFit: "cover", borderRadius: 6 }} />
-              </button>
-            ))}
-          </div>
-          <small className="muted">{props.images.length ? "Pick an image from your media library (JPG or PNG, up to 2 MB, ideally 1280×720). Custom thumbnails need a verified YouTube channel." : "Upload an image to your media library to use it as a thumbnail."}{thumb ? ` Using ${thumb.filename}.` : ""}</small>
-        </div>
+        <ThumbnailPicker workspaceId={props.workspaceId} idPrefix={id("thumb")} value={o.thumbnailAssetId} onChange={(v) => set({ thumbnailAssetId: v })}
+          images={props.images} video={props.video?.url ? { url: props.video.url } : undefined} onAdded={props.onAddImage} />
 
         <label className="field"><span>Playlist</span>
           <select className="input" id={id("playlist")} value={o.playlistId} onChange={(e) => set({ playlistId: e.target.value })}>
