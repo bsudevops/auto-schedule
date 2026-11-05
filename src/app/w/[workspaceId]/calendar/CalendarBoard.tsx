@@ -3,7 +3,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
 import { reschedulePostAction } from "@/app/actions/posts";
-import { PLATFORMS } from "@/lib/platforms";
+import { Icon } from "@/components/Icon";
+import { PlatformBadge } from "@/components/ui";
 import type { Platform } from "@/db/schema";
 
 export type CalPost = { id: string; title: string; status: string; date: string | null; time: string | null; hour: number | null; platforms: Platform[]; movable: boolean };
@@ -46,7 +47,7 @@ export function CalendarBoard({ workspaceId, view, days, today, month, posts, op
   const chip = (p: CalPost) => (
     <Link key={p.id} href={`/w/${workspaceId}/posts/${p.id}`} className={`ev ${EV_CLASS[p.status] ?? ""}`} draggable={p.movable}
       onDragStart={(e) => e.dataTransfer.setData("text/post", p.id)} title={p.title} style={{ textDecoration: "none", color: "inherit", cursor: p.movable ? "grab" : "pointer" }}>
-      {p.platforms[0] && <span className="pf" style={{ background: PLATFORMS[p.platforms[0]].color, width: 14, height: 14, fontSize: 7, borderRadius: 4 }}>{PLATFORMS[p.platforms[0]].short}</span>}
+      {p.platforms[0] && <PlatformBadge platform={p.platforms[0]} size="xs" />}
       {p.time && <span className="tm">{fmtTime(p.time)}</span>}
       <span className="tt">{p.title}</span>
     </Link>
@@ -64,7 +65,10 @@ export function CalendarBoard({ workspaceId, view, days, today, month, posts, op
               const slot = openSlots[d];
               return (
                 <div key={d} className={`day${d.slice(0, 7) !== month ? " out" : ""}${d === today ? " today" : ""}${over === d ? " drag" : ""}`} {...zone(d, d)}>
-                  <span className="dn">{Number(d.slice(8))}</span>
+                  <div className="day-h">
+                    <span className="dn">{Number(d.slice(8))}</span>
+                    {canCreate && d >= today && <Link className="day-add" href={`/w/${workspaceId}/compose?date=${d}`} aria-label={`Create a post on ${d}`} title="Create a post on this day"><Icon name="plus" size={14} /></Link>}
+                  </div>
                   {ps.slice(0, 3).map(chip)}
                   {ps.length > 3 && <Link href={`?view=week&d=${d}`} className="muted" style={{ fontSize: 11, paddingLeft: 4 }}>+{ps.length - 3} more</Link>}
                   {slot && ps.length < 3 && canCreate && (
@@ -90,8 +94,9 @@ export function CalendarBoard({ workspaceId, view, days, today, month, posts, op
               ...days.map((d) => {
                 const key = `${d}-${h}`;
                 return (
-                  <div key={key} className="cell" style={over === key ? { background: "var(--sky-50)" } : undefined} {...zone(key, d, h)}>
+                  <div key={key} className={`cell${over === key ? " drag" : ""}`} {...zone(key, d, h)}>
                     {items.filter((p) => p.date === d && p.hour === h).map(chip)}
+                    {canCreate && d >= today && <Link className="day-add" href={`/w/${workspaceId}/compose?date=${d}&time=${String(h).padStart(2, "0")}:00`} aria-label={`Create a post on ${d} at ${fmtHour(h)}`} title="Create a post at this time"><Icon name="plus" size={14} /></Link>}
                   </div>
                 );
               }),

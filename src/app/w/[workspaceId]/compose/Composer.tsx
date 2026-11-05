@@ -188,7 +188,7 @@ export function Composer(props: ComposerProps) {
                     {selected.map((c) => {
                       const len = (overrides[c.id] ?? caption).length;
                       const lim = PLATFORMS[c.platform].captionLimit;
-                      return <span key={c.id} className={`counter${len > lim ? " over" : ""}`} title={`${PLATFORMS[c.platform].name} limit`}>{PLATFORMS[c.platform].short} {len}/{lim > 9999 ? "∞" : lim}</span>;
+                      return <span key={c.id} className={`counter${len > lim ? " over" : ""}`} title={`${PLATFORMS[c.platform].name} limit`}><PlatformBadge platform={c.platform} size="xs" /> {len}/{lim > 9999 ? "∞" : lim}</span>;
                     })}
                   </div>
                 </div>
@@ -218,7 +218,7 @@ export function Composer(props: ComposerProps) {
               <section className="card">
                 <div className="card-h"><h3>Preview</h3>
                   {selected.length > 1 && (
-                    <div className="seg">{selected.map((c) => <button type="button" key={c.id} className={previewCh?.id === c.id ? "on" : ""} onClick={() => setTab(c.id)} title={PLATFORMS[c.platform].name}>{PLATFORMS[c.platform].short}</button>)}</div>
+                    <div className="seg">{selected.map((c) => <button type="button" key={c.id} className={previewCh?.id === c.id ? "on" : ""} onClick={() => setTab(c.id)} title={PLATFORMS[c.platform].name} aria-label={PLATFORMS[c.platform].name}><PlatformBadge platform={c.platform} size="xs" /></button>)}</div>
                   )}
                 </div>
                 <div className="card-b">

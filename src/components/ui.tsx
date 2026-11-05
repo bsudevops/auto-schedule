@@ -1,20 +1,22 @@
 import type { Platform } from "@/db/schema";
 import { PLATFORMS } from "@/lib/platforms";
+import { PLATFORM_GLYPHS } from "@/lib/platform-glyphs";
 
-export function PlatformBadge({ platform, large }: { platform: Platform; large?: boolean }) {
+/** The platform's own logo, white on its brand colour, so a channel is recognisable at a glance. */
+export function PlatformBadge({ platform, large, size }: { platform: Platform; large?: boolean; size?: "xs" }) {
   const p = PLATFORMS[platform];
   return (
-    <span className={`pf${large ? " lg" : ""}`} style={{ background: p.color }} title={p.name}>
-      {p.short}
+    <span className={`pf${large ? " lg" : ""}${size === "xs" ? " xs" : ""}`} data-platform={platform} style={{ background: p.color }} title={p.name} role="img" aria-label={p.name}>
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d={PLATFORM_GLYPHS[platform]} /></svg>
     </span>
   );
 }
 
-export function PlatformStack({ platforms }: { platforms: Platform[] }) {
+export function PlatformStack({ platforms, small }: { platforms: Platform[]; small?: boolean }) {
   return (
     <span className="pfs">
       {platforms.map((p) => (
-        <PlatformBadge key={p} platform={p} />
+        <PlatformBadge key={p} platform={p} size={small ? "xs" : undefined} />
       ))}
     </span>
   );

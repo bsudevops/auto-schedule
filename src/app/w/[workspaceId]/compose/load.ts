@@ -15,7 +15,7 @@ function localDateTime(d: Date, timeZone: string) {
   return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
 }
 
-export async function loadComposer(opts: { member: Member; workspace: { id: string; timezone: string; defaultHashtags: string; defaultFirstComment: string }; postId?: string; mediaId?: string; ideaId?: string; date?: string }): Promise<ComposerProps | null> {
+export async function loadComposer(opts: { member: Member; workspace: { id: string; timezone: string; defaultHashtags: string; defaultFirstComment: string }; postId?: string; mediaId?: string; ideaId?: string; date?: string; time?: string }): Promise<ComposerProps | null> {
   const { member, workspace } = opts;
   const wsId = workspace.id;
   const [chans, assets, qs, sets] = await Promise.all([
@@ -38,7 +38,7 @@ export async function loadComposer(opts: { member: Member; workspace: { id: stri
     channelIds: chans.filter((c) => c.status !== "reconnect").slice(0, 2).map((c) => c.id),
     caption: workspace.defaultHashtags ? `\n\n${workspace.defaultHashtags}` : "",
     overrides: {}, options: {}, mediaIds: [], firstComment: workspace.defaultFirstComment, tags: [],
-    mode: "schedule", date: opts.date && /^\d{4}-\d{2}-\d{2}$/.test(opts.date) ? opts.date : inTwoHours.date, time: inTwoHours.time, queueId: qs[0]?.id,
+    mode: "schedule", date: opts.date && /^\d{4}-\d{2}-\d{2}$/.test(opts.date) ? opts.date : inTwoHours.date, time: opts.time && /^\d{2}:\d{2}$/.test(opts.time) ? opts.time : inTwoHours.time, queueId: qs[0]?.id,
   };
   let postStatus: string | null = null;
 
