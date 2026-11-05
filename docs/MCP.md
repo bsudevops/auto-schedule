@@ -4,10 +4,14 @@ BSU Scheduler includes a [Model Context Protocol](https://modelcontextprotocol.i
 
 ```
 POST {APP_URL}/api/mcp
-Authorization: Bearer bsu_live_…
 ```
 
-It uses the same API keys as the [REST API](API.md). Create one in **Settings → API & webhooks**. The key decides what the assistant may do:
+Assistants connect in one of two ways:
+
+- **Sign in with OAuth** (Claude, ChatGPT and other hosted assistants). Add the address as a connector; the assistant opens a BSU Scheduler page where you sign in, pick a workspace and choose what it may do. Nothing to copy.
+- **API key** (tools that can send a header). Create one in **Settings → API & webhooks** and send `Authorization: Bearer bsu_live_…`. These are the same keys as the [REST API](API.md).
+
+Either way, the permissions decide what the assistant may do:
 
 | Tool | Needs scope |
 |---|---|
@@ -21,6 +25,17 @@ A tool the key can't use isn't offered at all. The assistant acts with the role 
 
 ## Connecting
 
+**Claude (claude.ai, Claude Desktop, mobile)**
+
+1. Go to **Settings → Connectors → Add custom connector**.
+2. Name it "BSU Scheduler" and paste `{APP_URL}/api/mcp`. Leave the advanced OAuth fields empty.
+3. Click **Connect**. Sign in to BSU Scheduler, pick the workspace and the permissions, and click **Allow**.
+4. In a chat, turn the connector on from the tools menu and ask, for example, "List my channels" or "Draft a LinkedIn post for tomorrow at 10am".
+
+Only owners and managers of a workspace can connect an app to it, the same people who can create API keys. Connected apps are listed under **Settings → API & webhooks → Connected AI apps**, where anyone with that role can disconnect them; access stops at once.
+
+**ChatGPT:** add a connector (developer mode) with the same address and choose OAuth. It signs in the same way.
+
 **Claude Code**
 
 ```
@@ -33,11 +48,14 @@ claude mcp add --transport http bsu-scheduler https://your-domain/api/mcp --head
 { "mcpServers": { "bsu-scheduler": { "command": "npx", "args": ["mcp-remote", "https://your-domain/api/mcp", "--header", "Authorization: Bearer ${BSU_KEY}"], "env": { "BSU_KEY": "bsu_live_…" } } } }
 ```
 
-**ChatGPT and other tools:** any client that can send a custom `Authorization` header to an HTTPS MCP address can use it. Some clients, including ChatGPT's connector screen, only offer "no authentication" or OAuth sign-in, and this server doesn't have OAuth yet, so they can't connect directly.
+**Other tools:** any client that can send a custom `Authorization` header, or that supports MCP's OAuth sign-in, can connect.
 
 The address must be reachable by the assistant. A server running on `localhost` works with local tools like Claude Code; hosted assistants need a public HTTPS address.
 
 ## Details
+
+- OAuth 2.1 with PKCE (S256 only) and dynamic client registration (RFC 7591). Discovery: `/.well-known/oauth-protected-resource` (RFC 9728) and `/.well-known/oauth-authorization-server` (RFC 8414). Endpoints: `/oauth/register`, `/oauth/authorize`, `/oauth/token`. An unauthenticated MCP request gets `401` with `WWW-Authenticate: Bearer resource_metadata="…"`.
+- Access tokens last one hour and are stored hashed, like API keys. Refresh tokens last 90 days and rotate on every use; a used one stops working. Sign-in codes last 10 minutes and work once. Redirect addresses must be HTTPS, or http on localhost.
 
 - Transport: Streamable HTTP, JSON responses. `GET` and `DELETE` return `405` because the server never opens its own stream.
 - Protocol versions: 2025-06-18, 2025-03-26, 2024-11-05.

@@ -647,6 +647,61 @@ export const apiKeys = pgTable("api_keys", {
     .references(() => user.id, { onDelete: "cascade" }),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  // Set for short-lived access tokens issued to a connected app (OAuth). Those are listed under "Connected AI apps", not here.
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  oauthClientId: text("oauth_client_id").references(() => oauthClients.id, { onDelete: "cascade" }),
+  createdAt: createdAt(),
+});
+
+/** Apps such as Claude that registered themselves to sign people in (OAuth dynamic client registration). */
+export const oauthClients = pgTable("oauth_clients", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  redirectUris: text("redirect_uris").array().notNull(),
+  // SHA-256 of the client secret, or null for public clients that rely on PKCE alone.
+  secretHash: text("secret_hash"),
+  createdAt: createdAt(),
+});
+
+/** One-time sign-in codes, valid for 10 minutes. Only the hash is stored. */
+export const oauthCodes = pgTable("oauth_codes", {
+  codeHash: text("code_hash").primaryKey(),
+  clientId: text("client_id")
+    .notNull()
+    .references(() => oauthClients.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  scopes: text("scopes").array().notNull(),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  resource: text("resource"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
+/** A person's approval for a connected app to use one workspace. Holds the current refresh token, rotated on every use. */
+export const oauthGrants = pgTable("oauth_grants", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  clientId: text("client_id")
+    .notNull()
+    .references(() => oauthClients.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  scopes: text("scopes").array().notNull(),
+  refreshHash: text("refresh_hash").notNull().unique(),
+  refreshExpiresAt: timestamp("refresh_expires_at", { withTimezone: true }).notNull(),
+  accessKeyId: uuid("access_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
   createdAt: createdAt(),
 });
 

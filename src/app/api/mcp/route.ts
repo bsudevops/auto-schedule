@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { apiError, authenticate } from "@/lib/api-auth";
 import { handleMessage, type RpcResponse } from "@/lib/mcp-protocol";
 import { mcpTools } from "@/lib/mcp-tools";
+import { resourceMetadataUrl } from "@/lib/oauth";
 
 export const runtime = "nodejs";
 
@@ -15,12 +16,16 @@ const INFO = {
 const noStore = { "Cache-Control": "no-store" };
 
 /**
- * MCP endpoint (Streamable HTTP). Connect with the same API key as the REST API:
+ * MCP endpoint (Streamable HTTP). Connect by signing in with OAuth, or with the same API key as the REST API:
  * Authorization: Bearer <key>. Each tool is available only if the key has the matching permission.
  */
 export async function POST(req: Request) {
   const ctx = await authenticate(req, null);
-  if (ctx instanceof NextResponse) return ctx;
+  if (ctx instanceof NextResponse) {
+    // Point MCP clients at the sign-in metadata so they can start OAuth (RFC 9728).
+    if (ctx.status === 401) ctx.headers.set("WWW-Authenticate", `Bearer resource_metadata="${resourceMetadataUrl()}"`);
+    return ctx;
+  }
   const body = (await req.json().catch(() => undefined)) as unknown;
   if (body === undefined) return NextResponse.json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "That isn't valid JSON." } }, { status: 400, headers: noStore });
 

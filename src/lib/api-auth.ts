@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { apiKeys, organizations, workspaceMembers, workspaces } from "@/db/schema";
@@ -36,8 +36,8 @@ export async function authenticate(req: Request, scope: ApiScope | null): Promis
     .innerJoin(workspaces, eq(workspaces.id, apiKeys.workspaceId))
     .innerJoin(organizations, eq(organizations.id, workspaces.orgId))
     .innerJoin(workspaceMembers, and(eq(workspaceMembers.workspaceId, apiKeys.workspaceId), eq(workspaceMembers.userId, apiKeys.createdBy)))
-    .where(and(eq(apiKeys.keyHash, sha256(m[1]!)), isNull(apiKeys.revokedAt), isNull(workspaces.archivedAt), isNull(organizations.deletionRequestedAt)));
-  if (!row) return apiError(401, "That API key isn't valid, was revoked, or its creator left the workspace.", { "WWW-Authenticate": "Bearer" });
+    .where(and(eq(apiKeys.keyHash, sha256(m[1]!)), isNull(apiKeys.revokedAt), or(isNull(apiKeys.expiresAt), gt(apiKeys.expiresAt, new Date())), isNull(workspaces.archivedAt), isNull(organizations.deletionRequestedAt)));
+  if (!row) return apiError(401, "That API key isn't valid, expired, was revoked, or its creator left the workspace.", { "WWW-Authenticate": "Bearer" });
   if (scope && !row.key.scopes.includes(scope)) return apiError(403, `This key doesn't have the ${scope} scope.`);
 
   try {

@@ -222,4 +222,9 @@ export async function purgeOldRecords() {
   await db.execute(sql`delete from notifications where read_at is not null and created_at < now() - interval '180 days'`);
   await db.execute(sql`delete from webhook_deliveries where created_at < now() - interval '30 days'`);
   await db.execute(sql`delete from activity_log where created_at < now() - interval '180 days'`);
+  // OAuth: used or expired sign-in codes, and expired or revoked short-lived access tokens.
+  await db.execute(sql`delete from oauth_codes where expires_at < now() - interval '1 day'`);
+  await db.execute(sql`delete from api_keys where oauth_client_id is not null and (expires_at < now() - interval '1 day' or revoked_at < now() - interval '1 day')`);
+  await db.execute(sql`delete from oauth_grants where revoked_at < now() - interval '30 days' or refresh_expires_at < now() - interval '30 days'`);
+  await db.execute(sql`delete from oauth_clients c where c.created_at < now() - interval '30 days' and not exists (select 1 from oauth_grants g where g.client_id = c.id) and not exists (select 1 from oauth_codes o where o.client_id = c.id)`);
 }

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { GoogleButton } from "../GoogleButton";
 
-export function SignInForm({ google, signupOpen = true }: { google: boolean; signupOpen?: boolean }) {
+export function SignInForm({ google, signupOpen = true, next = "/" }: { google: boolean; signupOpen?: boolean; next?: string }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -25,7 +25,7 @@ export function SignInForm({ google, signupOpen = true }: { google: boolean; sig
       setError(error.status === 403 ? "Confirm your email first. We sent you a link when you signed up." : "That email and password don't match. Try again or reset your password.");
       return;
     }
-    router.replace("/");
+    router.replace(next);
     router.refresh();
   }
 
@@ -33,7 +33,7 @@ export function SignInForm({ google, signupOpen = true }: { google: boolean; sig
     <form onSubmit={onSubmit}>
       <h2 style={{ fontSize: 24 }}>Sign in</h2>
       <p className="muted">Welcome back. Sign in to your workspace.</p>
-      {google && <GoogleButton />}
+      {google && <GoogleButton callbackURL={next} />}
       {google && (
         <div className="row muted" style={{ fontSize: 12 }}>
           <span style={{ flex: 1, height: 1, background: "var(--line)" }} />or<span style={{ flex: 1, height: 1, background: "var(--line)" }} />
