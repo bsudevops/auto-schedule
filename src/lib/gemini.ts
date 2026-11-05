@@ -151,7 +151,7 @@ export async function generateJson(input: { system: string; parts: GeminiPart[];
     const left = until - Date.now();
     if (left < 5_000) break;
     // The first model gets most of the time; backups share what is left.
-    const timeout = i === models.length - 1 ? left : Math.min(left, Math.max(30_000, left * 0.6));
+    const timeout = Math.floor(i === models.length - 1 ? left : Math.min(left, Math.max(30_000, left * 0.6)));
     try {
       return await generateWith(m, input, timeout, models.length === 1 ? 2 : 1);
     } catch (e) {
@@ -179,7 +179,7 @@ async function generateWith(model: string, input: { system: string; parts: Gemin
         contents: [{ role: "user", parts: input.parts }],
         generationConfig,
       }),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(Math.max(1, Math.floor(timeoutMs))),
     }, "generate", attempts);
   let res: Response;
   try {
