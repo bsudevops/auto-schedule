@@ -19,3 +19,11 @@ describe("parseMediaSuggestions", () => {
     expect(() => parseMediaSuggestions({ captions: "nope" }, 280)).toThrow(MediaAiError);
   });
 });
+
+describe("pickFallbacks", async () => {
+  const { pickFallbacks } = await import("./gemini");
+  it("picks other Flash models, stable and newest first, and skips special ones", () => {
+    const list = ["models/gemini-3.8-flash", "models/gemini-3.5-flash", "models/gemini-3.8-flash-lite", "models/gemini-3.8-pro", "models/gemini-3.9-flash-preview", "models/gemini-3.8-flash-image", "models/gemini-2.5-flash-tts"];
+    expect(pickFallbacks(list, "gemini-3.8-flash")).toEqual(["gemini-3.8-flash-lite", "gemini-3.5-flash"]);
+  });
+});

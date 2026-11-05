@@ -361,4 +361,18 @@ test("Gemini writes a caption, a YouTube title and hashtags from the post's vide
   const last = await (await request.get("http://localhost:3999/__last", { headers: { "x-goog-api-key": "e2e-gemini-key" } })).json();
   expect(last.kinds[0]).toBe("file_data");
   expect(last.text).toContain("cold brew launch");
+  expect(last.config.mediaResolution).toBe("MEDIA_RESOLUTION_LOW");
+
+  // When the main model is overloaded, it moves straight to a backup model, and reuses the upload.
+  const gem = { headers: { "x-goog-api-key": "e2e-gemini-key" } };
+  await request.post("http://localhost:3999/__busy", gem);
+  try {
+    await ai.getByRole("button", { name: "Write again" }).click();
+    await expect(ai.getByText("Fresh from the roaster")).toBeVisible({ timeout: 30_000 });
+    const again = await (await request.get("http://localhost:3999/__last", gem)).json();
+    expect(again.model).toBe("gemini-3.8-flash-lite");
+    expect(again.uploads).toBe(last.uploads);
+  } finally {
+    await request.delete("http://localhost:3999/__busy", gem);
+  }
 });

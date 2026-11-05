@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { aiFromMediaAction, aiWriteAction, deleteHashtagSetAction, importStockAction, saveHashtagSetAction, searchStockAction } from "@/app/actions/composer";
 import { Icon } from "@/components/Icon";
 import { tagsIn } from "@/lib/hashtags";
@@ -82,7 +82,17 @@ function MediaWriter({ workspaceId, channelIds, media, onUse }: {
   const [error, setError] = useState<string | null>(null);
   const [used, setUsed] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [secs, setSecs] = useState(0);
   const hasVideo = media.kinds.includes("video");
+  useEffect(() => {
+    if (!pending) return;
+    setSecs(0);
+    const t = setInterval(() => setSecs((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [pending]);
+  const stage = hasVideo
+    ? secs < 8 ? "Sending the video to Gemini" : secs < 25 ? "Gemini is watching the video" : "Writing captions and titles"
+    : secs < 4 ? "Sending the media to Gemini" : "Writing captions";
   const what = !media.ids.length ? null : hasVideo ? "your video" : media.ids.length > 1 ? `your ${media.ids.length} images` : "your image";
 
   function run() {
@@ -107,7 +117,7 @@ function MediaWriter({ workspaceId, channelIds, media, onUse }: {
       <button type="button" className="btn primary sm" disabled={pending || !media.ids.length} onClick={run} style={{ alignSelf: "flex-start" }}>
         <Icon name="spark" size={14} /> {result ? "Write again" : "Write from media"}
       </button>
-      {pending && <p className="muted" role="status" style={{ fontSize: 12.5, margin: 0 }}>{hasVideo ? "Watching the video and writing… this can take a minute." : "Looking at the media and writing…"}</p>}
+      {pending && <p className="muted" role="status" style={{ fontSize: 12.5, margin: 0 }}>{stage}… {secs}s{secs >= 45 ? ". Gemini is slow right now. It moves to a backup model and stops by itself if it can't finish." : ""}</p>}
       {error && <p className="err" role="alert" style={{ margin: 0 }}>{error}</p>}
       {used && <p className="muted" role="status" style={{ fontSize: 12.5, margin: 0 }}>{used}</p>}
       {result && (
