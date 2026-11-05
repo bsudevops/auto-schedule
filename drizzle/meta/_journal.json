@@ -57,6 +57,13 @@
       "when": 1793799951179,
       "tag": "0007_cron_retries",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793856916670,
+      "tag": "0008_sweet_clint_barton",
+      "breakpoints": true
     }
   ]
 }

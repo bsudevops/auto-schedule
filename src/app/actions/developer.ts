@@ -3,7 +3,8 @@ import { and, count, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
-import { apiKeys, webhooks } from "@/db/schema";
+import { apiKeys, oauthGrants, webhooks } from "@/db/schema";
+import { revokeGrant } from "@/lib/oauth";
 import { API_SCOPES } from "@/lib/api-auth";
 import { encryptSecret, newApiKey } from "@/lib/crypto";
 import { checkWebhookUrl } from "@/lib/safe-http";
@@ -22,7 +23,7 @@ export async function createApiKeyAction(workspaceId: string, name: string, scop
   const { user } = await requireWorkspace(workspaceId, "manage_api");
   const parsed = keyInput.safeParse({ name, scopes });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]!.message };
-  const [{ n }] = (await db.select({ n: count() }).from(apiKeys).where(and(eq(apiKeys.workspaceId, workspaceId), isNull(apiKeys.revokedAt)))) as [{ n: number }];
+  const [{ n }] = (await db.select({ n: count() }).from(apiKeys).where(and(eq(apiKeys.workspaceId, workspaceId), isNull(apiKeys.revokedAt), isNull(apiKeys.oauthClientId)))) as [{ n: number }];
   if (n >= 20) return { ok: false, error: "This workspace has 20 active keys. Revoke one you no longer use first." };
   const k = newApiKey();
   await db.insert(apiKeys).values({ workspaceId, name: parsed.data.name, prefix: k.prefix, keyHash: k.hash, scopes: parsed.data.scopes, createdBy: user.id });
@@ -32,7 +33,7 @@ export async function createApiKeyAction(workspaceId: string, name: string, scop
 
 export async function revokeApiKeyAction(workspaceId: string, keyId: string) {
   await requireWorkspace(workspaceId, "manage_api");
-  await db.update(apiKeys).set({ revokedAt: new Date() }).where(and(eq(apiKeys.id, keyId), eq(apiKeys.workspaceId, workspaceId), isNull(apiKeys.revokedAt)));
+  await db.update(apiKeys).set({ revokedAt: new Date() }).where(and(eq(apiKeys.id, keyId), eq(apiKeys.workspaceId, workspaceId), isNull(apiKeys.revokedAt), isNull(apiKeys.oauthClientId)));
   refresh(workspaceId);
   return { ok: true };
 }
@@ -76,6 +77,15 @@ export async function testWebhookAction(workspaceId: string, id: string) {
   if (!h) return { ok: false, error: "That webhook no longer exists." };
   if (!h.active) return { ok: false, error: "Turn the webhook on first." };
   await emitEvent(workspaceId, "ping", { message: `Test event from ${workspace.name}` }, id);
+  refresh(workspaceId);
+  return { ok: true };
+}
+
+/** Disconnects an app such as Claude from this workspace. Its tokens stop working at once. */
+export async function disconnectAppAction(workspaceId: string, grantId: string) {
+  await requireWorkspace(workspaceId, "manage_api");
+  const [g] = await db.select({ id: oauthGrants.id }).from(oauthGrants).where(and(eq(oauthGrants.id, grantId), eq(oauthGrants.workspaceId, workspaceId)));
+  if (g) await revokeGrant(g.id);
   refresh(workspaceId);
   return { ok: true };
 }
