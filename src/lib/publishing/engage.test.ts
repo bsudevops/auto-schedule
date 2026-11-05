@@ -51,3 +51,16 @@ describe("TikTok", () => {
     expect(ENGAGE.tiktok!.comments).toBeUndefined();
   });
 });
+
+describe("YouTube removals", () => {
+  it("reports videos that are missing or rejected and leaves live ones alone", async () => {
+    mockFetch([{ match: "/videos?part=status", body: { items: [
+      { id: "live1", status: { uploadStatus: "processed" } },
+      { id: "rej1", status: { uploadStatus: "rejected", rejectionReason: "copyright" } },
+    ] } }]);
+    const gone = await ENGAGE.youtube!.removed!(ctx("UC1"), ["live1", "rej1", "del1"]);
+    expect(gone.has("live1")).toBe(false);
+    expect(gone.get("del1")).toBe("Deleted on YouTube");
+    expect(gone.get("rej1")).toMatch(/Rejected by YouTube/);
+  });
+});

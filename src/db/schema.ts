@@ -405,6 +405,9 @@ export const postTargets = pgTable(
     status: targetStatus("status").notNull().default("pending"),
     externalPostId: text("external_post_id"),
     externalUrl: text("external_url"),
+    /** When a sync found the post gone from the platform (deleted or taken down there). Cleared if it comes back. */
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    removedReason: text("removed_reason"),
     error: text("error"),
     attempts: smallint("attempts").notNull().default(0),
     // Cron mode only: the target isn't tried again before this time (retry back-off, rate-limit wait, or a claim in progress).

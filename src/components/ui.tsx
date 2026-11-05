@@ -44,6 +44,8 @@ const STATUS: Record<string, [string, string]> = {
   expiring: ["s-review", "Expires soon"],
   reconnect: ["s-failed", "Reconnect"],
   disconnected: ["s-draft", "Disconnected"],
+  removed: ["s-failed", "Deleted on platform"],
+  test: ["s-draft", "Test only, not sent"],
 };
 export function StatusPill({ status }: { status: string }) {
   const [cls, label] = STATUS[status] ?? ["s-draft", status];

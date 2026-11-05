@@ -15,7 +15,7 @@ function localDateTime(d: Date, timeZone: string) {
   return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
 }
 
-export async function loadComposer(opts: { member: Member; workspace: { id: string; timezone: string; defaultHashtags: string; defaultFirstComment: string }; postId?: string; mediaId?: string; ideaId?: string; date?: string; time?: string }): Promise<ComposerProps | null> {
+export async function loadComposer(opts: { member: Member; workspace: { id: string; timezone: string; defaultHashtags: string; defaultFirstComment: string }; postId?: string; mediaId?: string; ideaId?: string; date?: string; time?: string; fromPostId?: string }): Promise<ComposerProps | null> {
   const { member, workspace } = opts;
   const wsId = workspace.id;
   const [chans, assets, qs, sets] = await Promise.all([
@@ -59,6 +59,24 @@ export async function loadComposer(opts: { member: Member; workspace: { id: stri
     };
     postStatus = p.status;
     if (!canEditPost(member, p)) postStatus = "readonly";
+  } else if (opts.fromPostId && /^[0-9a-f-]{36}$/i.test(opts.fromPostId)) {
+    // Duplicate: the same content and settings as a new post, timed like any new one.
+    const [p] = await db.select().from(posts).where(and(eq(posts.id, opts.fromPostId), eq(posts.workspaceId, wsId)));
+    if (p) {
+      const [targets, pm] = await Promise.all([
+        db.select().from(postTargets).where(eq(postTargets.postId, p.id)),
+        db.select().from(postMedia).where(eq(postMedia.postId, p.id)).orderBy(asc(postMedia.position)),
+      ]);
+      const live = new Set(chans.map((c) => c.id));
+      const kept = targets.filter((t) => live.has(t.channelId));
+      initial = {
+        ...initial,
+        channelIds: kept.map((t) => t.channelId), caption: p.caption,
+        overrides: Object.fromEntries(kept.filter((t) => t.captionOverride != null).map((t) => [t.channelId, t.captionOverride!])),
+        options: Object.fromEntries(kept.map((t) => [t.channelId, t.options])),
+        mediaIds: pm.map((m) => m.assetId), firstComment: p.firstComment, tags: p.tags,
+      };
+    }
   } else {
     if (opts.mediaId) initial.mediaIds = assets.some((a) => a.id === opts.mediaId) ? [opts.mediaId] : [];
     if (opts.ideaId) {

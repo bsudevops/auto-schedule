@@ -37,13 +37,14 @@ export default async function Page({ params, searchParams }: { params: Promise<{
     .from(posts)
     .where(and(eq(posts.workspaceId, workspaceId), or(and(gte(posts.scheduledAt, toUtc(listStart)), lt(posts.scheduledAt, toUtc(listEnd))), view === "list" ? and(isNull(posts.scheduledAt), eq(posts.status, "draft")) : undefined)))
     .orderBy(asc(posts.scheduledAt));
-  const targets = rows.length ? await db.select({ postId: postTargets.postId, platform: channels.platform }).from(postTargets).innerJoin(channels, eq(channels.id, postTargets.channelId)).where(inArray(postTargets.postId, rows.map((r) => r.id))) : [];
+  const targets = rows.length ? await db.select({ postId: postTargets.postId, platform: channels.platform, removedAt: postTargets.removedAt, removedReason: postTargets.removedReason }).from(postTargets).innerJoin(channels, eq(channels.id, postTargets.channelId)).where(inArray(postTargets.postId, rows.map((r) => r.id))) : [];
   const calPosts: CalPost[] = rows.map((r) => {
     const lp = r.at ? localParts(r.at, tz) : null;
     return {
       id: r.id, title: (r.caption.split("\n")[0] || "Untitled post").slice(0, 80), status: r.status,
       date: lp?.date ?? null, time: lp?.time ?? null, hour: lp?.hour ?? null,
       platforms: [...new Set(targets.filter((t) => t.postId === r.id).map((t) => t.platform))] as Platform[],
+      removed: targets.find((t) => t.postId === r.id && t.removedAt)?.removedReason ?? null,
       movable: r.status !== "published" && r.status !== "publishing" && can(member, r.authorId === member.userId ? "create_posts" : "edit_others_posts") && (r.status !== "scheduled" || can(member, "publish")),
     };
   });
@@ -94,7 +95,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
               <h2 style={{ marginLeft: 6 }}>{title}</h2>
               <Link className="btn sm" href={`${base}?view=${view}`}>Today</Link>
             </div>
-            <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>{["scheduled", "published", "draft", "failed"].map((s) => <StatusPill key={s} status={s} />)}</div>
+            <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>{["scheduled", "published", "draft", "failed", "removed"].map((s) => <StatusPill key={s} status={s} />)}</div>
           </div>
           {view === "list" ? (
             calPosts.length ? (
@@ -106,7 +107,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
                       <td className="num" style={{ whiteSpace: "nowrap" }}>{p.date ? <>{new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(p.date + "T00:00:00Z"))}<div className="muted" style={{ fontSize: 12 }}>{p.time}</div></> : <span className="muted">No date</span>}</td>
                       <td><Link href={`/w/${workspaceId}/posts/${p.id}`} style={{ color: "inherit", fontWeight: 600 }}>{p.title}</Link></td>
                       <td><PlatformStack platforms={p.platforms} /></td>
-                      <td><StatusPill status={p.status} /></td>
+                      <td><StatusPill status={p.status} />{p.removed && <> <StatusPill status="removed" /></>}</td>
                     </tr>
                   ))}</tbody>
                 </table>

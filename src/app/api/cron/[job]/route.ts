@@ -21,6 +21,7 @@ const JOBS: Record<string, () => Promise<unknown>> = {
   tokens: () => refreshExpiringTokens(),
   inbox: () => syncAll("inbox"),
   insights: () => syncAll("insights"),
+  removals: () => syncAll("removals"),
   purge: async () => {
     await purgeOldRecords();
     return purgeDeletedOrganizations();

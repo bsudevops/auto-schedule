@@ -78,6 +78,13 @@
       "when": 1793862514242,
       "tag": "0010_powerful_thunderbolt_ross",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793867804815,
+      "tag": "0011_furry_nova",
+      "breakpoints": true
     }
   ]
 }

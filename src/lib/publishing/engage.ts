@@ -46,6 +46,8 @@ export interface EngageSource {
   comments?(ctx: Ctx, externalPostId: string): Promise<RemoteComment[]>;
   /** Replies to a comment and returns the new comment's ID. */
   reply?(ctx: Ctx, thread: { externalId: string; meta: Record<string, unknown> }, text: string): Promise<string>;
+  /** Of these post IDs, the ones the platform no longer has (deleted or taken down), with the reason. */
+  removed?(ctx: Ctx, externalPostIds: string[]): Promise<Map<string, string>>;
 }
 
 const unix = (d: Date) => String(Math.floor(d.getTime() / 1000));
@@ -298,6 +300,23 @@ const youtube: EngageSource = {
     const r = await gget<YtStats>(`${YT}/videos?part=statistics&id=${encodeURIComponent(id)}`, accessToken, "Reading video figures", "YouTube");
     const st = r.items?.[0]?.statistics;
     return { videoViews: ytNum(st?.viewCount), likes: ytNum(st?.likeCount), comments: ytNum(st?.commentCount) };
+  },
+  async removed({ accessToken }, ids) {
+    const gone = new Map<string, string>();
+    for (let i = 0; i < ids.length; i += 50) {
+      const batch = ids.slice(i, i + 50);
+      const r = await gget<{ items?: { id: string; status?: { uploadStatus?: string; rejectionReason?: string; failureReason?: string } }[] }>(
+        `${YT}/videos?part=status&id=${batch.map(encodeURIComponent).join(",")}`, accessToken, "Checking videos", "YouTube");
+      const found = new Map((r.items ?? []).map((v) => [v.id, v.status]));
+      for (const id of batch) {
+        const st = found.get(id);
+        if (!found.has(id)) gone.set(id, "Deleted on YouTube");
+        else if (st?.uploadStatus === "rejected") gone.set(id, `Rejected by YouTube${st.rejectionReason ? ` (${st.rejectionReason})` : ""}`);
+        else if (st?.uploadStatus === "deleted") gone.set(id, "Deleted on YouTube");
+        else if (st?.uploadStatus === "failed") gone.set(id, `YouTube couldn't process the video${st.failureReason ? ` (${st.failureReason})` : ""}`);
+      }
+    }
+    return gone;
   },
 };
 

@@ -7,6 +7,7 @@ import { sendEmail } from "./email";
 export const NOTIFICATION_TYPES = {
   post_failed: { label: "A post fails to publish", inApp: true, email: true },
   post_published: { label: "A post is published", inApp: true, email: false },
+  post_removed: { label: "A published post is deleted or taken down on the platform", inApp: true, email: true },
   channel_attention: { label: "A channel needs reconnecting or is about to expire", inApp: true, email: true },
   inbox_assigned: { label: "An inbox conversation is assigned to you", inApp: true, email: true },
   member_joined: { label: "Someone joins a workspace", inApp: true, email: false },
