@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { publicUrl } from "@/lib/media/storage";
-import { GeminiError, generateJson, uploadFile, type GeminiPart } from "@/lib/gemini";
+import { GeminiError, fileReady, generateJson, uploadFile, type GeminiPart } from "@/lib/gemini";
 
 /**
  * "Write from media": Gemini looks at the post's image, carousel or video and suggests captions,
@@ -60,7 +60,8 @@ const KEEP_MS = 40 * 3600_000;
 
 async function uploaded(m: MediaForAi, data?: Buffer) {
   const hit = uploads.get(m.storageKey);
-  if (hit && hit.until > Date.now()) return hit;
+  // Check the earlier upload is still on Gemini's side; it can expire or be deleted. Costs well under a second.
+  if (hit && hit.until > Date.now() && (await fileReady(hit.name))) return hit;
   const f = await uploadFile(data ?? (await bytes(m.storageKey)), m.mimeType, m.filename);
   const entry = { ...f, until: Date.now() + KEEP_MS };
   uploads.set(m.storageKey, entry);
@@ -111,10 +112,8 @@ export async function writeFromMedia(input: { media: MediaForAi[]; platforms: st
       ].filter(Boolean).join("\n"),
     });
     const data = await generateJson({ system: SYSTEM, parts, schema: SCHEMA, video: Boolean(video), budgetMs: 90_000 }).catch((e) => {
-      // A reused upload Gemini has already dropped: forget it so the next try sends the file again.
-      if (e instanceof GeminiError && (e.status === 403 || e.status === 404 || e.status === 400) && /file/i.test(e.message)) {
-        for (const m of input.media) uploads.delete(m.storageKey);
-      }
+      // If anything went wrong, don't trust the reused uploads: the next try sends the files again.
+      for (const m of input.media) uploads.delete(m.storageKey);
       throw e;
     });
     return parseMediaSuggestions(data, input.limit);

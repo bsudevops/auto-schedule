@@ -97,6 +97,16 @@ export async function uploadFile(data: Buffer, mimeType: string, displayName: st
   return { name: file.name, uri: file.uri, mimeType: file.mimeType ?? mimeType };
 }
 
+/** Whether a file uploaded earlier is still there and ready to use (it may have expired or been deleted). */
+export async function fileReady(name: string): Promise<boolean> {
+  try {
+    const res = await call(`${API}/v1beta/${name}`, { method: "GET", signal: AbortSignal.timeout(8_000) }, "file status", 1);
+    return ((await res.json()) as { state?: string }).state === "ACTIVE";
+  } catch {
+    return false;
+  }
+}
+
 /** Removes an uploaded file; Gemini also deletes them by itself after 48 hours. */
 export async function deleteFile(name: string) {
   await call(`${API}/v1beta/${name}`, { method: "DELETE" }, "file delete").catch(() => {});
