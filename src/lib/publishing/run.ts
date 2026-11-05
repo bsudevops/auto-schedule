@@ -75,6 +75,8 @@ export async function publishTarget(targetId: string, attemptsMade: number, maxA
         caption,
         firstComment: post.firstComment,
         media,
+        options: target.options,
+        thumbnail: await loadThumbnail(target.options.thumbnailAssetId, post.workspaceId),
       });
     }
 
@@ -116,6 +118,14 @@ async function loadMedia(postId: string, platform: keyof typeof PLATFORMS) {
     altText: asset.altText,
     url: publicUrl(asset.kind === "image" ? pickImageKey(platform, asset, variants.filter((v) => v.assetId === asset.id)) : asset.storageKey),
   }));
+}
+
+/** The image picked as a thumbnail in the post's platform settings, if it still exists in the workspace. */
+async function loadThumbnail(assetId: unknown, workspaceId: string) {
+  if (typeof assetId !== "string") return null;
+  const [asset] = await db.select().from(mediaAssets).where(and(eq(mediaAssets.id, assetId), eq(mediaAssets.workspaceId, workspaceId)));
+  if (!asset || asset.kind !== "image") return null;
+  return { kind: asset.kind, mimeType: asset.mimeType, sizeBytes: asset.sizeBytes, altText: asset.altText, url: publicUrl(asset.storageKey) };
 }
 
 /** The post's overall status, from its targets' statuses. */

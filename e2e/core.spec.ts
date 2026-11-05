@@ -214,3 +214,37 @@ test("sign-in lands on the organization page, where a client workspace can be cr
   await page.waitForURL(/\/w\/[0-9a-f-]{36}/);
   await expect(page.getByText(name).first()).toBeVisible();
 });
+
+test("YouTube settings are saved with the post", async ({ page }) => {
+  const base = await openWorkspace(page);
+  await go(page, `${base}/compose`);
+  const yt = page.locator("button.chip", { hasText: "YouTube" }).first();
+  if (!(await yt.getAttribute("class"))?.includes("on")) await yt.click();
+  const caption = `YouTube details ${Date.now()}\nA longer description for the video.`;
+  await page.locator("textarea").first().fill(caption);
+  const panel = page.getByRole("region", { name: /YouTube settings/ });
+  await expect(panel.getByLabel(/^Title/)).toHaveAttribute("placeholder", caption.split("\n")[0]!);
+  await panel.getByLabel(/^Title/).fill("Our spring menu");
+  await panel.getByLabel("Visibility").selectOption("unlisted");
+  await panel.getByText("Yes, it’s made for kids").click();
+  await panel.getByLabel("Tags", { exact: true }).fill("coffee, spring,");
+  await panel.getByLabel("Category").selectOption({ label: "Howto & Style" });
+  await panel.getByRole("button", { name: "Show more" }).click();
+  await panel.getByLabel("Paid promotion").check();
+  await panel.getByLabel("Video language").selectOption({ label: "Malayalam" });
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await page.waitForURL(/calendar/);
+
+  await go(page, `${base}/search?q=${encodeURIComponent(caption.split("\n")[0]!)}`);
+  await page.getByRole("link", { name: /YouTube details/ }).first().click();
+  const again = page.getByRole("region", { name: /YouTube settings/ });
+  await expect(again.getByLabel(/^Title/)).toHaveValue("Our spring menu");
+  await expect(again.getByLabel("Visibility")).toHaveValue("unlisted");
+  await expect(again.getByRole("radio", { name: /Yes, it’s made for kids/ })).toBeChecked();
+  await expect(again.getByRole("button", { name: "Remove tag coffee" })).toBeVisible();
+  await expect(again.getByRole("button", { name: "Remove tag spring" })).toBeVisible();
+  await expect(again.getByLabel("Category")).toHaveValue("26");
+  await again.getByRole("button", { name: "Show more" }).click();
+  await expect(again.getByLabel("Paid promotion")).toBeChecked();
+  await expect(again.getByLabel("Video language")).toHaveValue("ml");
+});

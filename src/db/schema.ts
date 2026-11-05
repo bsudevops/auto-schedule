@@ -400,6 +400,8 @@ export const postTargets = pgTable(
       .notNull()
       .references(() => channels.id, { onDelete: "cascade" }),
     captionOverride: text("caption_override"),
+    // Platform settings for this channel, such as YouTube's title, visibility and playlist (see lib/youtube-options.ts).
+    options: jsonb("options").$type<Record<string, unknown>>().notNull().default({}),
     status: targetStatus("status").notNull().default("pending"),
     externalPostId: text("external_post_id"),
     externalUrl: text("external_url"),

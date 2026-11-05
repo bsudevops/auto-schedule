@@ -79,6 +79,10 @@ export type PublishInput = {
   caption: string;
   firstComment: string;
   media: PublishMedia[];
+  /** This channel's platform settings for the post, such as YouTube's title and visibility. */
+  options?: Record<string, unknown>;
+  /** A separate image, such as a YouTube thumbnail chosen in the post's settings. */
+  thumbnail?: PublishMedia | null;
 };
 
 export type PublishResult = { externalId: string; url: string | null; warnings: string[] };

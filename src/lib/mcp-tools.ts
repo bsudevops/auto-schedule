@@ -8,6 +8,9 @@ import type { ApiContext, ApiScope } from "./api-auth";
 import { postInWorkspace, serializePosts } from "./api-posts";
 import type { Tool } from "./mcp-protocol";
 import { deletePost, postInput, savePost } from "./posts";
+import { youtubePlaylists } from "./publishing/google";
+import { accessTokenFor } from "./publishing/tokens";
+import { YT_CATEGORIES } from "./youtube-options";
 
 const has = (scope: ApiScope) => (c: ApiContext) => c.scopes.includes(scope);
 const json = (v: unknown) => ({ text: JSON.stringify(v, null, 2) });
@@ -25,6 +28,30 @@ const POST_FIELDS = {
   mediaIds: { type: "array", items: { type: "string" }, description: "Media library asset IDs." },
   firstComment: { type: "string" },
   tags: { type: "array", items: { type: "string" } },
+  options: {
+    type: "object",
+    description: "Optional platform settings per channel ID. For a YouTube channel these are the YouTube Studio video details; the caption (or that channel's override) is the video description. Leave a field out for its default.",
+    additionalProperties: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Video title, up to 100 characters, no < or >. Defaults to the caption's first line." },
+        visibility: { type: "string", enum: ["public", "unlisted", "private"], description: "Default public." },
+        madeForKids: { type: "boolean", description: "Audience: made for kids. Default false." },
+        tags: { type: "array", items: { type: "string" }, description: "YouTube tags, up to 500 characters in total." },
+        categoryId: { type: "string", enum: Object.keys(YT_CATEGORIES), description: `Category: ${Object.entries(YT_CATEGORIES).map(([k, v]) => `${k} ${v}`).join(", ")}. Default 22.` },
+        playlistId: { type: "string", description: "Playlist to add the video to, from list_youtube_playlists." },
+        thumbnailAssetId: { type: "string", description: "Media library image to use as the thumbnail (JPG or PNG, up to 2 MB)." },
+        notifySubscribers: { type: "boolean", description: "Default true." },
+        embeddable: { type: "boolean", description: "Default true." },
+        showLikes: { type: "boolean", description: "Show the like count. Default true." },
+        license: { type: "string", enum: ["youtube", "creativeCommon"] },
+        paidPromotion: { type: "boolean", description: "Contains paid promotion. Default false." },
+        alteredContent: { type: "boolean", description: "Contains realistic altered or synthetic content. Default false." },
+        language: { type: "string", description: "Video language code, such as en or ml." },
+        recordingDate: { type: "string", description: "YYYY-MM-DD." },
+      },
+    },
+  },
 };
 
 export const mcpTools: Tool<ApiContext>[] = [
@@ -52,6 +79,24 @@ export const mcpTools: Tool<ApiContext>[] = [
           .where(and(eq(channels.workspaceId, c.workspace.id), ne(channels.status, "disconnected")))
           .orderBy(asc(channels.platform)),
       ),
+  },
+  {
+    name: "list_youtube_playlists",
+    title: "List YouTube playlists",
+    description: "Lists a YouTube channel's playlists, so a video can be added to one with options.playlistId on create_post.",
+    inputSchema: { type: "object", properties: { channelId: { type: "string", description: "A YouTube channel ID from list_channels." } }, required: ["channelId"] },
+    readOnly: true,
+    allowed: has("channels:read"),
+    run: async (args, c) => {
+      const id = uuid.safeParse((args as { channelId?: unknown })?.channelId);
+      const [ch] = id.success ? await db.select().from(channels).where(and(eq(channels.id, id.data), eq(channels.workspaceId, c.workspace.id), eq(channels.platform, "youtube"))) : [];
+      if (!ch) return bad("No YouTube channel with that ID in this workspace.");
+      try {
+        return json(await youtubePlaylists(await accessTokenFor(ch)));
+      } catch (e) {
+        return bad(`Couldn't list the playlists: ${(e as Error).message}`);
+      }
+    },
   },
   {
     name: "list_posts",

@@ -16,12 +16,14 @@ Either way, the permissions decide what the assistant may do:
 | Tool | Needs scope |
 |---|---|
 | `get_workspace` | any |
-| `list_channels` | `channels:read` |
+| `list_channels`, `list_youtube_playlists` | `channels:read` |
 | `list_posts`, `get_post` | `posts:read` |
 | `create_post`, `update_post`, `delete_post` | `posts:write` |
 | `get_analytics` | `analytics:read` |
 
 A tool the key can't use isn't offered at all. The assistant acts with the role of the person who made the key, so the app's usual rules apply (caption limits, contributors can only save drafts). Give a key only the scopes it needs, and revoke it when you stop using it. Posting with `mode: "now"` publishes immediately; the tool descriptions tell the assistant to use it only when asked.
+
+`create_post` and `update_post` take `options`, keyed by channel ID. For a YouTube channel these are the video details from YouTube Studio: title, visibility, made for kids, tags, category, playlist, thumbnail image, and the "Show more" settings. The caption is the video description.
 
 ## Connecting
 

@@ -11,10 +11,11 @@ import { addTags } from "@/lib/hashtags";
 import { checkPost } from "@/lib/post-rules";
 import { uploadFiles } from "../media/MediaControls";
 import { AiPanel, HashtagMenu, StockSearch, type HashtagSet } from "./ComposerTools";
+import { YoutubeSettings } from "./YoutubeSettings";
 
 type Mode = "draft" | "now" | "schedule" | "queue";
 type Channel = { id: string; platform: Platform; handle: string; displayName: string; status: string };
-type Media = { id: string; kind: "image" | "video"; filename: string; thumb: string; url: string };
+type Media = { id: string; kind: "image" | "video"; filename: string; thumb: string; url: string; width?: number | null; height?: number | null; durationMs?: number | null };
 
 export type ComposerProps = {
   workspaceId: string;
@@ -32,6 +33,8 @@ export type ComposerProps = {
     channelIds: string[];
     caption: string;
     overrides: Record<string, string>;
+    /** Platform settings per channel ID, such as YouTube's title and visibility. */
+    options: Record<string, Record<string, unknown>>;
     mediaIds: string[];
     firstComment: string;
     tags: string[];
@@ -53,6 +56,7 @@ export function Composer(props: ComposerProps) {
   const [chIds, setChIds] = useState(initial.channelIds);
   const [caption, setCaption] = useState(initial.caption);
   const [overrides, setOverrides] = useState(initial.overrides);
+  const [options, setOptions] = useState(initial.options);
   const [tab, setTab] = useState<string>("all");
   const [mediaIds, setMediaIds] = useState(initial.mediaIds);
   const [firstComment, setFirstComment] = useState(initial.firstComment);
@@ -93,6 +97,7 @@ export function Composer(props: ComposerProps) {
     start(async () => {
       const r = await savePostAction(workspaceId, {
         postId: initial.postId, channelIds: chIds, caption, overrides, mediaIds, firstComment,
+        options: Object.fromEntries(Object.entries(options).filter(([id]) => chIds.includes(id))),
         tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
         mode: asDraft ? "draft" : mode, date, time, queueId,
       });
@@ -190,6 +195,13 @@ export function Composer(props: ComposerProps) {
                     onUse={(v, how) => setText(how === "tags" ? addTags(text, v.split(/\s+/)) : v)} />
                 )}
               </section>
+
+              {selected.filter((c) => c.platform === "youtube").map((c) => (
+                <YoutubeSettings key={c.id} workspaceId={workspaceId} channel={c} value={options[c.id]} caption={overrides[c.id] ?? caption}
+                  onChange={(v) => setOptions((all) => ({ ...all, [c.id]: v }))}
+                  onEditDescription={() => { setTab(c.id); requestAnimationFrame(() => { textRef.current?.focus(); textRef.current?.scrollIntoView({ block: "center" }); }); }}
+                  images={media.filter((m) => m.kind === "image")} video={chosenMedia.find((m) => m.kind === "video")} />
+              ))}
 
               <section className="card"><div className="card-b stack">
                 <label className="field"><span>Tags <span className="muted" style={{ fontWeight: 400 }}>(comma-separated, for your team only)</span></span>

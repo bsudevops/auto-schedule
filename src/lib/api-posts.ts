@@ -9,7 +9,7 @@ export async function serializePosts(ids: string[]) {
   const [rows, targets, media] = await Promise.all([
     db.select().from(posts).where(inArray(posts.id, ids)),
     db
-      .select({ postId: postTargets.postId, channelId: postTargets.channelId, platform: channels.platform, status: postTargets.status, url: postTargets.externalUrl, error: postTargets.error, captionOverride: postTargets.captionOverride, publishedAt: postTargets.publishedAt })
+      .select({ postId: postTargets.postId, channelId: postTargets.channelId, platform: channels.platform, status: postTargets.status, url: postTargets.externalUrl, error: postTargets.error, captionOverride: postTargets.captionOverride, options: postTargets.options, publishedAt: postTargets.publishedAt })
       .from(postTargets)
       .innerJoin(channels, eq(channels.id, postTargets.channelId))
       .where(inArray(postTargets.postId, ids)),
@@ -27,7 +27,7 @@ export async function serializePosts(ids: string[]) {
       scheduledAt: p.scheduledAt,
       publishedAt: p.publishedAt,
       mediaIds: media.filter((m) => m.postId === p.id).map((m) => m.assetId),
-      channels: targets.filter((t) => t.postId === p.id).map((t) => ({ channelId: t.channelId, platform: t.platform, status: t.status, url: t.url, error: t.error, captionOverride: t.captionOverride, publishedAt: t.publishedAt })),
+      channels: targets.filter((t) => t.postId === p.id).map((t) => ({ channelId: t.channelId, platform: t.platform, status: t.status, url: t.url, error: t.error, captionOverride: t.captionOverride, options: t.options, publishedAt: t.publishedAt })),
       createdAt: p.createdAt,
     }));
 }

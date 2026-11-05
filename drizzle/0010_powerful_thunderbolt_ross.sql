@@ -1,0 +1,1 @@
+ALTER TABLE "post_targets" ADD COLUMN "options" jsonb DEFAULT '{}'::jsonb NOT NULL;
