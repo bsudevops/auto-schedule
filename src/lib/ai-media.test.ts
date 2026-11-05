@@ -27,3 +27,25 @@ describe("pickFallbacks", async () => {
     expect(pickFallbacks(list, "gemini-3.8-flash")).toEqual(["gemini-3.8-flash-lite", "gemini-3.5-flash"]);
   });
 });
+
+describe("generateJson fallback", () => {
+  it("moves to the backup model when the main one is overloaded, with a whole-number timeout", async () => {
+    process.env.GEMINI_API_KEY = "k";
+    process.env.GEMINI_MODEL = "main";
+    process.env.GEMINI_FALLBACK_MODELS = "backup";
+    let t = 1_000_000;
+    const now = vi.spyOn(Date, "now").mockImplementation(() => (t += 1)); // time passes, so 60% of what is left is a fraction
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+      seen.push(url);
+      if (url.includes("/main:")) return new Response(JSON.stringify({ error: { message: "high demand" } }), { status: 503 });
+      return new Response(JSON.stringify({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: '{"ok":true}' }] } }] }), { status: 200 });
+    });
+    const { generateJson } = await import("./gemini");
+    await expect(generateJson({ system: "s", parts: [{ text: "x" }], schema: {} })).resolves.toEqual({ ok: true });
+    expect(seen.map((u) => u.split("/models/")[1])).toEqual(["main:generateContent", "backup:generateContent"]);
+    now.mockRestore();
+    vi.unstubAllGlobals();
+  });
+});
