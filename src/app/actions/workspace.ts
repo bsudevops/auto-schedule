@@ -8,6 +8,7 @@ import { invitations, orgMembers, organizations, user as userTable, workspaceMem
 import { BRAND } from "@/lib/brand";
 import { sha256 } from "@/lib/crypto";
 import { logActivity } from "@/lib/activity";
+import { addWorkspaceToOrg } from "@/lib/org-workspaces";
 import { sendEmail } from "@/lib/email";
 import { canManageMember, ROLE_LABELS, ROLE_RANK } from "@/lib/permissions";
 import { requireUser, requireWorkspace } from "@/lib/session";
@@ -30,21 +31,9 @@ export async function createOrganization(_: FormState, form: FormData): Promise<
 /** Adds a workspace to an organization from the organization page. Only the organization's owners and admins can. */
 export async function createWorkspaceInOrg(orgId: string, _: FormState, form: FormData): Promise<FormState> {
   const user = await requireUser();
-  const [row] = await db
-    .select({ role: orgMembers.role, deletionRequestedAt: organizations.deletionRequestedAt })
-    .from(orgMembers)
-    .innerJoin(organizations, eq(organizations.id, orgMembers.orgId))
-    .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, user.id)));
-  if (!row || row.role === "member") return { error: "Only organization owners and admins can add workspaces." };
-  if (row.deletionRequestedAt) return { error: "This organization is scheduled for deletion." };
-  const parsed = workspaceInput.safeParse(Object.fromEntries(form));
-  if (!parsed.success) return { error: first(parsed.error) };
-  const id = await db.transaction(async (tx) => {
-    const [ws] = await tx.insert(workspaces).values({ orgId, ...parsed.data }).returning({ id: workspaces.id });
-    await tx.insert(workspaceMembers).values({ workspaceId: ws!.id, userId: user.id, role: "owner" });
-    return ws!.id;
-  });
-  redirect(`/w/${id}`);
+  const r = await addWorkspaceToOrg(user.id, orgId, Object.fromEntries(form));
+  if (!r.ok) return { error: r.error };
+  redirect(`/w/${r.id}`);
 }
 
 /** Adds another workspace to the same organization. Only organization owners and admins can do this. */

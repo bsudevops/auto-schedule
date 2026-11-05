@@ -634,9 +634,8 @@ export const notificationPrefs = pgTable(
 
 export const apiKeys = pgTable("api_keys", {
   id: uuid("id").primaryKey().defaultRandom(),
-  workspaceId: uuid("workspace_id")
-    .notNull()
-    .references(() => workspaces.id, { onDelete: "cascade" }),
+  // Null only for a connected app's token that covers every workspace its person owns or manages.
+  workspaceId: uuid("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   prefix: text("prefix").notNull(),
   // SHA-256 of the full key. The key itself is shown once and never stored.
@@ -672,9 +671,8 @@ export const oauthCodes = pgTable("oauth_codes", {
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-  workspaceId: uuid("workspace_id")
-    .notNull()
-    .references(() => workspaces.id, { onDelete: "cascade" }),
+  // Null means every workspace the person owns or manages.
+  workspaceId: uuid("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }),
   scopes: text("scopes").array().notNull(),
   redirectUri: text("redirect_uri").notNull(),
   codeChallenge: text("code_challenge").notNull(),
@@ -693,9 +691,8 @@ export const oauthGrants = pgTable("oauth_grants", {
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-  workspaceId: uuid("workspace_id")
-    .notNull()
-    .references(() => workspaces.id, { onDelete: "cascade" }),
+  // Null means every workspace the person owns or manages.
+  workspaceId: uuid("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }),
   scopes: text("scopes").array().notNull(),
   refreshHash: text("refresh_hash").notNull().unique(),
   refreshExpiresAt: timestamp("refresh_expires_at", { withTimezone: true }).notNull(),

@@ -1,7 +1,6 @@
 "use server";
 import { redirect } from "next/navigation";
-import { API_SCOPES } from "@/lib/api-auth";
-import { canConnect, createCode, issuer } from "@/lib/oauth";
+import { ACCOUNT_ONLY_SCOPES, OAUTH_SCOPES, canConnect, createCode, issuer } from "@/lib/oauth";
 import { AUTH_FIELDS, checkAuthorize, errorRedirect } from "@/lib/oauth-request";
 import { requireUser } from "@/lib/session";
 
@@ -19,9 +18,14 @@ export async function decideOAuth(_: State, form: FormData): Promise<State> {
 
   if (form.get("decision") !== "approve") redirect(errorRedirect(checked.redirectUri, "access_denied", "The person declined.", p.state));
 
-  const workspaceId = String(form.get("workspaceId") ?? "");
-  if (!workspaceId || !(await canConnect(user.id, workspaceId))) return { error: "Pick a workspace you manage." };
-  const scopes = form.getAll("scopes").map(String).filter((s) => s in API_SCOPES && checked.scopes.includes(s));
+  // "all" connects every workspace the person owns or manages, including ones added later.
+  const picked = String(form.get("workspaceId") ?? "");
+  const workspaceId = picked === "all" ? null : picked;
+  if (!picked || !(await canConnect(user.id, workspaceId))) return { error: "Pick a workspace you manage." };
+  const scopes = form
+    .getAll("scopes")
+    .map(String)
+    .filter((s) => s in OAUTH_SCOPES && checked.scopes.includes(s) && (workspaceId === null || !ACCOUNT_ONLY_SCOPES.includes(s)));
   if (!scopes.length) return { error: "Allow at least one permission." };
 
   const code = await createCode({ clientId: checked.client.id, userId: user.id, workspaceId, scopes, redirectUri: checked.redirectUri, codeChallenge: p.code_challenge!, resource: p.resource ?? null });

@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { BrandLogo } from "@/components/BrandLogo";
-import { API_SCOPES } from "@/lib/api-auth";
 import { BRAND } from "@/lib/brand";
+import { OAUTH_SCOPES } from "@/lib/oauth";
 import { AUTH_FIELDS, checkAuthorize } from "@/lib/oauth-request";
 import { can } from "@/lib/permissions";
-import { getSessionUser, listUserWorkspaces } from "@/lib/session";
+import { getSessionUser, listUserOrgs, listUserWorkspaces } from "@/lib/session";
 import { ConsentForm } from "./ConsentForm";
 
 export const metadata = { title: "Connect an app" };
@@ -31,20 +31,22 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   if (checked.kind === "fatal") return shell(<div className="card card-b"><h1 style={{ fontSize: 20 }}>Can&apos;t connect this app</h1><p className="muted" style={{ marginTop: 6 }}>{checked.message}</p></div>);
 
   const workspaces = (await listUserWorkspaces(user.id)).filter((w) => can({ userId: user.id, role: w.role, active: true }, "manage_api"));
+  // An organization owner or admin with no workspace yet can still connect, so the assistant can add the first one.
+  const orgAdmin = (await listUserOrgs(user.id)).some((o) => o.role !== "member" && !o.deletionRequestedAt);
   const host = new URL(checked.redirectUri).host;
   return shell(
     <>
       <div>
         <h1 style={{ fontSize: 22 }}>Connect {checked.client.name}</h1>
         <p className="muted" style={{ marginTop: 4 }}>
-          {checked.client.name} wants to use one of your workspaces as {user.email}. After you allow it, you&apos;ll go back to <b>{host}</b>.
+          {checked.client.name} wants to use BSU Scheduler as {user.email}. After you allow it, you&apos;ll go back to <b>{host}</b>.
         </p>
       </div>
-      {workspaces.length ? (
+      {workspaces.length || orgAdmin ? (
         <ConsentForm
           fields={Object.fromEntries(Object.entries(p).filter((e): e is [string, string] => !!e[1]))}
           workspaces={workspaces.map((w) => ({ id: w.id, name: w.name, orgName: w.orgName }))}
-          scopes={checked.scopes.map((s) => ({ id: s, label: API_SCOPES[s as keyof typeof API_SCOPES] }))}
+          scopes={checked.scopes.map((s) => ({ id: s, label: OAUTH_SCOPES[s as keyof typeof OAUTH_SCOPES] }))}
         />
       ) : (
         <div className="card card-b"><p className="muted">You need the Owner or Manager role in a workspace to connect an app to it.</p></div>

@@ -29,10 +29,12 @@ A tool the key can't use isn't offered at all. The assistant acts with the role 
 
 1. Go to **Settings → Connectors → Add custom connector**.
 2. Name it "BSU Scheduler" and paste `{APP_URL}/api/mcp`. Leave the advanced OAuth fields empty.
-3. Click **Connect**. Sign in to BSU Scheduler, pick the workspace and the permissions, and click **Allow**.
+3. Click **Connect**. Sign in to BSU Scheduler and choose what it may use: **All workspaces you own or manage** (the default, which also covers clients you add later) or a single workspace. Pick the permissions and click **Allow**.
 4. In a chat, turn the connector on from the tools menu and ask, for example, "List my channels" or "Draft a LinkedIn post for tomorrow at 10am".
 
-Only owners and managers of a workspace can connect an app to it, the same people who can create API keys. Connected apps are listed under **Settings → API & webhooks → Connected AI apps**, where anyone with that role can disconnect them; access stops at once.
+With all workspaces, the assistant gets two extra tools: `list_workspaces`, and `create_workspace` (with the "Add new client workspaces" permission, for organization owners and admins). Every other tool takes a `workspace` argument, the client's name or ID, so you can say "schedule this for Wexley" or "show next week's posts for each client". It acts with your role in each workspace.
+
+Only owners and managers of a workspace can connect an app to it, the same people who can create API keys. Connected apps are listed under **Settings → API & webhooks → Connected AI apps** (an all-workspace connection shows in every workspace its person belongs to), where anyone with that role can disconnect them; access stops at once.
 
 **ChatGPT:** add a connector (developer mode) with the same address and choose OAuth. It signs in the same way.
 
