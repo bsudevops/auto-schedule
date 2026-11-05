@@ -13,6 +13,7 @@ export type MediaForAi = { id: string; kind: "image" | "video"; mimeType: string
 export type MediaSuggestions = { captions: string[]; titles: string[]; hashtags: string[] };
 
 export const MAX_IMAGES = 10;
+export const VIDEO_FPS = 0.5;
 const MAX_INLINE = 7 * 1024 * 1024;
 const MAX_VIDEO = 1024 * 1024 * 1024;
 
@@ -85,7 +86,8 @@ export async function writeFromMedia(input: { media: MediaForAi[]; platforms: st
   try {
     if (video) {
       const f = await uploaded(video);
-      parts.push({ file_data: { mime_type: f.mimeType, file_uri: f.uri } });
+      // One frame every 2 seconds instead of every second: half the tokens, and plenty to write a caption from.
+      parts.push({ file_data: { mime_type: f.mimeType, file_uri: f.uri }, video_metadata: { fps: VIDEO_FPS } });
     } else {
       // Read all the images at once rather than one after another.
       const read = await Promise.all(images.map(async (img) => {

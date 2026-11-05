@@ -362,6 +362,7 @@ test("Gemini writes a caption, a YouTube title and hashtags from the post's vide
   expect(last.kinds[0]).toBe("file_data");
   expect(last.text).toContain("cold brew launch");
   expect(last.config.mediaResolution).toBe("MEDIA_RESOLUTION_LOW");
+  expect(last.fps).toBe(0.5);
 
   // When the main model is overloaded, it moves straight to a backup model, and reuses the upload.
   const gem = { headers: { "x-goog-api-key": "e2e-gemini-key" } };

@@ -17,7 +17,7 @@ export class GeminiError extends Error {
   }
 }
 
-export type GeminiPart = { text: string } | { inline_data: { mime_type: string; data: string } } | { file_data: { mime_type: string; file_uri: string } };
+export type GeminiPart = { text: string } | { inline_data: { mime_type: string; data: string } } | { file_data: { mime_type: string; file_uri: string }; video_metadata?: { fps?: number } };
 
 const key = () => process.env.GEMINI_API_KEY!.trim();
 
@@ -228,13 +228,13 @@ async function generateWith(model: string, input: { system: string; parts: Gemin
   if (input.video) config.mediaResolution = "MEDIA_RESOLUTION_LOW";
   // Captions don't need long reasoning; Gemini 3 models think a lot by default.
   if (/gemini-3/.test(model)) config.thinkingConfig = { thinkingLevel: "low" };
-  const send = (generationConfig: Record<string, unknown>) =>
+  const send = (generationConfig: Record<string, unknown>, parts = input.parts) =>
     call(`${API}/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         system_instruction: { parts: [{ text: input.system }] },
-        contents: [{ role: "user", parts: input.parts }],
+        contents: [{ role: "user", parts }],
         generationConfig,
       }),
       signal,
@@ -244,11 +244,11 @@ async function generateWith(model: string, input: { system: string; parts: Gemin
     res = await send(config);
   } catch (e) {
     // An older model may not know these options; ask again without them.
-    if (!(e instanceof GeminiError && e.status === 400 && /thinking|media_?resolution/i.test(e.message))) throw e;
+    if (!(e instanceof GeminiError && e.status === 400 && /thinking|media_?resolution|video_?metadata|fps/i.test(e.message))) throw e;
     const plain = { ...config };
     delete plain.thinkingConfig;
     delete plain.mediaResolution;
-    res = await send(plain);
+    res = await send(plain, input.parts.map((p) => ("file_data" in p ? { file_data: p.file_data } : p)));
   }
   const data = (await res.json()) as Generated;
   if (data.promptFeedback?.blockReason) throw new GeminiError("Gemini won't write about this media.");
