@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { publicUrl } from "@/lib/media/storage";
-import { GeminiError, deleteFile, generateJson, uploadFile, type GeminiPart } from "@/lib/gemini";
+import { GeminiError, generateJson, uploadFile, type GeminiPart } from "@/lib/gemini";
 
 /**
  * "Write from media": Gemini looks at the post's image, carousel or video and suggests captions,
@@ -51,6 +51,23 @@ export function parseMediaSuggestions(data: unknown, limit: number): MediaSugges
   return { captions, titles, hashtags: [...new Set(hashtags)] };
 }
 
+/**
+ * Files already sent to Gemini, by storage key, so "Write again" and a second try skip the upload.
+ * Gemini deletes uploaded files by itself after 48 hours; we stop reusing them well before that.
+ */
+const uploads = new Map<string, { name: string; uri: string; mimeType: string; until: number }>();
+const KEEP_MS = 40 * 3600_000;
+
+async function uploaded(m: MediaForAi, data?: Buffer) {
+  const hit = uploads.get(m.storageKey);
+  if (hit && hit.until > Date.now()) return hit;
+  const f = await uploadFile(data ?? (await bytes(m.storageKey)), m.mimeType, m.filename);
+  const entry = { ...f, until: Date.now() + KEEP_MS };
+  uploads.set(m.storageKey, entry);
+  for (const [k, v] of uploads) if (v.until <= Date.now()) uploads.delete(k);
+  return entry;
+}
+
 async function bytes(key: string): Promise<Buffer> {
   const res = await fetch(publicUrl(key), { signal: AbortSignal.timeout(120_000) });
   if (!res.ok) throw new MediaAiError("Couldn't read the media file from storage.");
@@ -64,21 +81,21 @@ export async function writeFromMedia(input: { media: MediaForAi[]; platforms: st
   if (video && video.sizeBytes > MAX_VIDEO) throw new MediaAiError("That video is over 1 GB, too big for Gemini to read.");
 
   const parts: GeminiPart[] = [];
-  const uploaded: string[] = [];
   try {
     if (video) {
-      const f = await uploadFile(await bytes(video.storageKey), video.mimeType, video.filename);
-      uploaded.push(f.name);
+      const f = await uploaded(video);
       parts.push({ file_data: { mime_type: f.mimeType, file_uri: f.uri } });
     } else {
-      for (const img of images) {
-        const data = await bytes(img.storageKey);
-        if (data.length > MAX_INLINE) {
-          const f = await uploadFile(data, img.mimeType, img.filename);
-          uploaded.push(f.name);
+      // Read all the images at once rather than one after another.
+      const read = await Promise.all(images.map(async (img) => {
+        if ((uploads.get(img.storageKey)?.until ?? 0) > Date.now()) return { img, data: null };
+        return { img, data: await bytes(img.storageKey) };
+      }));
+      for (const { img, data } of read) {
+        if (data && data.length <= MAX_INLINE) parts.push({ inline_data: { mime_type: img.mimeType, data: data.toString("base64") } });
+        else {
+          const f = await uploaded(img, data ?? undefined);
           parts.push({ file_data: { mime_type: f.mimeType, file_uri: f.uri } });
-        } else {
-          parts.push({ inline_data: { mime_type: img.mimeType, data: data.toString("base64") } });
         }
       }
     }
@@ -93,12 +110,16 @@ export async function writeFromMedia(input: { media: MediaForAi[]; platforms: st
         input.notes.trim() ? `Notes from the team:\n<notes>\n${input.notes.trim()}\n</notes>` : "",
       ].filter(Boolean).join("\n"),
     });
-    const data = await generateJson({ system: SYSTEM, parts, schema: SCHEMA });
+    const data = await generateJson({ system: SYSTEM, parts, schema: SCHEMA, video: Boolean(video), budgetMs: 90_000 }).catch((e) => {
+      // A reused upload Gemini has already dropped: forget it so the next try sends the file again.
+      if (e instanceof GeminiError && (e.status === 403 || e.status === 404 || e.status === 400) && /file/i.test(e.message)) {
+        for (const m of input.media) uploads.delete(m.storageKey);
+      }
+      throw e;
+    });
     return parseMediaSuggestions(data, input.limit);
   } catch (e) {
     if (e instanceof GeminiError) throw new MediaAiError(e.message);
     throw e;
-  } finally {
-    await Promise.all(uploaded.map(deleteFile));
   }
 }
