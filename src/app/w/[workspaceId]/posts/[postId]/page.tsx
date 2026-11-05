@@ -101,7 +101,7 @@ export default async function Page({ params }: { params: Promise<{ workspaceId: 
 
       {removed.map(({ target: t, channel: c }) => (
         <div className="ov-alert bad" key={`gone-${t.id}`} role="status">
-          <Icon name="x" size={16} />
+          <Icon name="trash" size={16} />
           <div className="grow"><b>{t.removedReason ?? `Deleted on ${PLATFORMS[c.platform].name}`}</b> <span className="muted">Noticed {fmt(t.removedAt)}. The post stays here for your records; Duplicate sends it again.</span></div>
         </div>
       ))}

@@ -168,7 +168,7 @@ export async function syncRemovals(c: Channel, targetIds?: string[]) {
     const reason = gone.get(r.externalPostId!);
     if (reason && !r.removedAt) {
       removed++;
-      await db.update(postTargets).set({ removedAt: new Date(), removedReason: reason }).where(eq(postTargets.id, r.id));
+      await db.update(postTargets).set({ removedAt: new Date(), removedReason: reason, removedDismissedAt: null }).where(eq(postTargets.id, r.id));
       const href = `/w/${c.workspaceId}/posts/${r.postId}`;
       const name = PLATFORMS[c.platform].name;
       await logActivity({ workspaceId: c.workspaceId, actorId: null, verb: "post.removed", summary: `${postTitle(r.caption)} is no longer on ${name}: ${reason.toLowerCase()}`, href });
@@ -179,7 +179,7 @@ export async function syncRemovals(c: Channel, targetIds?: string[]) {
         payload: { title: `${postTitle(r.caption)} is no longer on ${name}`, body: `${reason}. It stays in BSU Scheduler, marked in red on the calendar.`, href },
       });
     } else if (!reason && r.removedAt) {
-      await db.update(postTargets).set({ removedAt: null, removedReason: null }).where(eq(postTargets.id, r.id));
+      await db.update(postTargets).set({ removedAt: null, removedReason: null, removedDismissedAt: null }).where(eq(postTargets.id, r.id));
     }
   }
   return { checked: rows.length, removed };

@@ -319,4 +319,13 @@ test("a post deleted on the platform shows as a red, struck-through entry and on
   await expect(page.locator(".ov-alert.bad")).toContainText("Deleted on Facebook");
   await expect(page.locator(".pd-target.removed")).toHaveCount(1);
   await expect(page.getByRole("link", { name: "Duplicate" })).toBeVisible();
+
+  // The Overview alert can be closed, and stays closed.
+  await go(page, base);
+  const alert = page.locator(".ov-alert", { hasText: "is no longer on Facebook" });
+  await expect(alert).toBeVisible();
+  await alert.getByRole("button", { name: "Dismiss this alert" }).click();
+  await expect(alert).toBeHidden();
+  await page.reload();
+  await expect(page.locator(".ov-alert", { hasText: "is no longer on Facebook" })).toHaveCount(0);
 });
