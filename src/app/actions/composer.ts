@@ -7,6 +7,7 @@ import { channels, hashtagSets, mediaAssets, type Platform } from "@/db/schema";
 import { AI_TASKS, AiError, aiConfigured, writeWithAI } from "@/lib/ai";
 import { MAX_IMAGES, MediaAiError, writeFromMedia, type MediaSuggestions } from "@/lib/ai-media";
 import { geminiConfigured } from "@/lib/gemini";
+import { DriveError, driveConfig, downloadDriveFile, isAccessToken, isDriveFileId } from "@/lib/drive";
 import { cleanTags } from "@/lib/hashtags";
 import { overLimit } from "@/lib/limits";
 import { UploadError } from "@/lib/media/pipeline";
@@ -147,4 +148,38 @@ export async function importStockAction(workspaceId: string, photoId: string) {
     console.error("Stock import failed", e);
     return { error: "Couldn't add that photo. Try again." };
   }
+}
+
+/* ----------------------------- Google Drive ---------------------------- */
+
+/**
+ * Copies files picked in Google Drive into app storage and returns them ready for the composer.
+ * Platforms fetch media from a public address, so a Drive file can't be posted straight from Drive.
+ */
+export async function importDriveAction(workspaceId: string, fileIds: unknown, token: unknown) {
+  const { user } = await requireWorkspace(workspaceId, "upload_media");
+  if (!driveConfig()) return { error: "Google Drive isn't set up on this server.", media: [], errors: [] };
+  const ids = Array.isArray(fileIds) ? [...new Set(fileIds.filter(isDriveFileId))].slice(0, 10) : [];
+  if (!ids.length) return { error: "Pick at least one photo or video.", media: [], errors: [] };
+  if (!isAccessToken(token)) return { error: "Your Google sign-in expired. Choose the files again.", media: [], errors: [] };
+  if (await overLimit(`drive-import:${user.id}`, 100, 3600)) return { error: "Too many files from Drive this hour. Try again later.", media: [], errors: [] };
+
+  const media: Array<{ id: string; kind: "image" | "video"; filename: string; thumb: string; url: string }> = [];
+  const errors: string[] = [];
+  // One at a time, so a few large videos don't all sit in memory together.
+  for (const id of ids) {
+    try {
+      const file = await downloadDriveFile(id, token);
+      const asset = await createAsset({ workspaceId, userId: user.id, data: file.data, filename: file.filename, folderId: null });
+      media.push({ id: asset.id, kind: asset.kind, filename: asset.filename, thumb: publicUrl(thumbKey(asset.storageKey, asset.kind)), url: publicUrl(asset.storageKey) });
+    } catch (e) {
+      if (e instanceof DriveError || e instanceof UploadError) errors.push(e.message);
+      else {
+        console.error("Drive import failed", e);
+        errors.push("A file couldn't be copied from Google Drive. Try again.");
+      }
+    }
+  }
+  if (media.length) revalidatePath(`/w/${workspaceId}/media`);
+  return { media, errors };
 }

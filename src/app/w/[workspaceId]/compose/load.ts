@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { channels, hashtagSets, ideas, mediaAssets, postMedia, postTargets, posts, queueSlots, queues } from "@/db/schema";
 import { aiConfigured } from "@/lib/ai";
 import { geminiConfigured } from "@/lib/gemini";
+import { driveConfig } from "@/lib/drive";
 import { stockConfigured } from "@/lib/stock";
 import { publicUrl } from "@/lib/media/storage";
 import { thumbKey } from "@/lib/media/service";
@@ -98,6 +99,7 @@ export async function loadComposer(opts: { member: Member; workspace: { id: stri
     aiEnabled: aiConfigured(),
     mediaAiEnabled: geminiConfigured(),
     stockEnabled: stockConfigured() && can(member, "upload_media"),
+    drive: can(member, "upload_media") ? driveConfig() : null,
     initial,
   };
 }

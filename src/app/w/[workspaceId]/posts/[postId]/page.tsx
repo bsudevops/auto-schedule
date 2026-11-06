@@ -20,6 +20,8 @@ import { CheckNowButton } from "./CheckNowButton";
 import { RetryButton } from "./RetryButton";
 
 export const metadata = { title: "Post" };
+// Copying a large video in from Google Drive can take a while.
+export const maxDuration = 300;
 
 const LIVE = new Set(["publishing", "published", "failed", "partially_failed"]);
 const VISIBILITY = { public: "Public", unlisted: "Unlisted", private: "Private" } as const;
