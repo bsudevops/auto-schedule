@@ -9,7 +9,7 @@ import { BRAND } from "@/lib/brand";
 import { sha256 } from "@/lib/crypto";
 import { logActivity } from "@/lib/activity";
 import { addWorkspaceToOrg } from "@/lib/org-workspaces";
-import { sendEmail } from "@/lib/email";
+import { appUrl, emailConfigured, sendEmail } from "@/lib/email";
 import { canManageMember, ROLE_LABELS, ROLE_RANK } from "@/lib/permissions";
 import { requireUser, requireWorkspace } from "@/lib/session";
 import { inviteInput, onboardingInput, workspaceInput, workspaceSettingsInput, type FormState } from "@/lib/validation";
@@ -74,25 +74,62 @@ export async function inviteMember(workspaceId: string, _: FormState, form: Form
     .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(userTable.email, email)));
   if (existing) return { error: `${email} is already in this workspace.` };
 
-  const token = randomBytes(24).toString("base64url");
-  await db.insert(invitations).values({
-    workspaceId,
-    email,
-    role,
-    tokenHash: sha256(token),
-    invitedBy: user.id,
-    expiresAt: new Date(Date.now() + 7 * 86_400_000),
-  });
-  const link = `${process.env.APP_URL ?? ""}/invite/${token}`;
-  await sendEmail({
-    to: email,
-    subject: `${user.name} invited you to ${workspace.name} on ${BRAND.name}`,
-    text: `${user.name} invited you to join ${workspace.name} as ${ROLE_LABELS[role]}.\n\nAccept the invitation: ${link}\n\nThe link works for 7 days.`,
-  });
+  // A new invitation replaces any earlier pending one for the same address.
+  await db.delete(invitations).where(and(eq(invitations.workspaceId, workspaceId), eq(invitations.email, email), isNull(invitations.acceptedAt)));
+  const sent = await createAndSendInvite({ workspaceId, workspaceName: workspace.name, email, role, inviter: user });
   await logActivity({ workspaceId, actorId: user.id, verb: "member.invited", summary: `invited ${email} as ${ROLE_LABELS[role]}`, href: `/w/${workspaceId}/settings/members` });
   revalidatePath(`/w/${workspaceId}/settings/members`);
-  // Show the link only when email isn't configured, so the inviter can share it another way.
-  return { ok: `Invitation sent to ${email}.`, link: process.env.SMTP_HOST ? undefined : link };
+  return sent;
+}
+
+/** Creates an invitation, emails it, and says what happened. The link is returned whenever the email didn't go out, so it can be shared another way. */
+async function createAndSendInvite(opts: { workspaceId: string; workspaceName: string; email: string; role: WorkspaceRole; inviter: { id: string; name: string } }): Promise<FormState> {
+  const token = randomBytes(24).toString("base64url");
+  await db.insert(invitations).values({
+    workspaceId: opts.workspaceId,
+    email: opts.email,
+    role: opts.role,
+    tokenHash: sha256(token),
+    invitedBy: opts.inviter.id,
+    expiresAt: new Date(Date.now() + 7 * 86_400_000),
+  });
+  const link = `${appUrl()}/invite/${token}`;
+  try {
+    await sendEmail({
+      to: opts.email,
+      subject: `${opts.inviter.name} invited you to ${opts.workspaceName} on ${BRAND.name}`,
+      text: `${opts.inviter.name} invited you to join the ${opts.workspaceName} workspace on ${BRAND.name} as ${ROLE_LABELS[opts.role]}.\n\nAccept with this email address (${opts.email}). If you don't have an account yet, you can create one from the link. The invitation works for 7 days.`,
+      button: { label: "Accept invitation", url: link },
+    });
+  } catch (e) {
+    return { error: `The invitation was created, but the email to ${opts.email} failed. ${e instanceof Error ? e.message : ""} You can share this link instead:`, link };
+  }
+  if (!emailConfigured()) return { ok: `Invitation created for ${opts.email}. Email isn't set up yet, so share this link with them:`, link };
+  return { ok: `Invitation sent to ${opts.email}.` };
+}
+
+/** Sends a pending invitation again with a fresh link (the old link stops working) and another 7 days. */
+export async function resendInvitation(workspaceId: string, invitationId: string): Promise<FormState> {
+  const { user, member, workspace } = await requireWorkspace(workspaceId, "manage_members");
+  const [inv] = await db.select().from(invitations).where(and(eq(invitations.id, invitationId), eq(invitations.workspaceId, workspaceId), isNull(invitations.acceptedAt)));
+  if (!inv) return { error: "This invitation was already accepted or cancelled." };
+  if (ROLE_RANK[inv.role] > ROLE_RANK[member.role]) return { error: "You can't resend an invitation for a higher role than yours." };
+  await db.delete(invitations).where(eq(invitations.id, inv.id));
+  const sent = await createAndSendInvite({ workspaceId, workspaceName: workspace.name, email: inv.email, role: inv.role, inviter: user });
+  revalidatePath(`/w/${workspaceId}/settings/members`);
+  return sent;
+}
+
+/** Cancels a pending invitation so its link stops working. */
+export async function cancelInvitation(workspaceId: string, invitationId: string): Promise<FormState> {
+  const { user, member } = await requireWorkspace(workspaceId, "manage_members");
+  const [inv] = await db.select().from(invitations).where(and(eq(invitations.id, invitationId), eq(invitations.workspaceId, workspaceId), isNull(invitations.acceptedAt)));
+  if (!inv) return { error: "This invitation was already accepted or cancelled." };
+  if (ROLE_RANK[inv.role] > ROLE_RANK[member.role]) return { error: "You can't cancel an invitation for a higher role than yours." };
+  await db.delete(invitations).where(eq(invitations.id, inv.id));
+  await logActivity({ workspaceId, actorId: user.id, verb: "member.invite_cancelled", summary: `cancelled the invitation for ${inv.email}`, href: `/w/${workspaceId}/settings/members` });
+  revalidatePath(`/w/${workspaceId}/settings/members`);
+  return { ok: "Invitation cancelled." };
 }
 
 async function nameOf(userId: string) {

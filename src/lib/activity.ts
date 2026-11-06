@@ -11,7 +11,7 @@ export type Verb =
   | "post.published" | "post.failed" | "post.removed"
   | "queue.created" | "queue.deleted" | "queue.shuffled"
   | "channel.connected" | "channel.disconnected" | "channel.removed"
-  | "member.invited" | "member.role" | "member.removed";
+  | "member.invited" | "member.invite_cancelled" | "member.role" | "member.removed";
 
 export async function logActivity(e: { workspaceId: string; actorId: string | null; verb: Verb; summary: string; href?: string | null }) {
   try {

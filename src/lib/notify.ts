@@ -1,7 +1,8 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { notificationPrefs, notifications, user, workspaceMembers, workspaces } from "@/db/schema";
-import { sendEmail } from "./email";
+import { BRAND } from "./brand";
+import { appUrl, sendEmail } from "./email";
 
 /** Every notification the product sends, with the defaults a user gets until they change their preferences. */
 export const NOTIFICATION_TYPES = {
@@ -34,12 +35,12 @@ export async function notify(opts: { userIds: string[]; workspaceId: string | nu
   const emailIds = ids.filter((id) => pref(id).email);
   if (emailIds.length) {
     const rows = await db.select({ email: user.email, deactivatedAt: user.deactivatedAt }).from(user).where(inArray(user.id, emailIds));
-    const appUrl = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
-    const text = [opts.payload.body ?? "", opts.payload.href ? `\nOpen it: ${appUrl}${opts.payload.href}` : "", "\n\nChange which emails you get in Settings, Notifications."].join("");
+    const text = [opts.payload.body || opts.payload.title, "Change which emails you get in Settings, Notifications."].join("\n\n");
+    const button = opts.payload.href ? { label: "Open in " + BRAND.name, url: `${appUrl()}${opts.payload.href}` } : undefined;
     await Promise.all(
       rows
         .filter((r) => !r.deactivatedAt)
-        .map((r) => sendEmail({ to: r.email, subject: opts.payload.title, text }).catch((e) => console.error("Notification email failed", e))),
+        .map((r) => sendEmail({ to: r.email, subject: opts.payload.title, text, button }).catch((e) => console.error("Notification email failed", e))),
     );
   }
 }

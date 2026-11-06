@@ -27,14 +27,24 @@ export const auth = betterAuth({
     requireEmailVerification: true,
     minPasswordLength: 10,
     sendResetPassword: async ({ user: u, url }) => {
-      await sendEmail({ to: u.email, subject: `Reset your ${BRAND.name} password`, text: `Reset your password: ${url}\n\nIf you didn't ask for this, ignore this email.` });
+      await sendEmail({
+        to: u.email,
+        subject: `Reset your ${BRAND.name} password`,
+        text: `Someone asked to reset the password for your ${BRAND.name} account (${u.email}).\n\nIf it wasn't you, ignore this email and your password stays the same.`,
+        button: { label: "Reset password", url },
+      });
     },
   },
   emailVerification: {
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user: u, url }) => {
-      await sendEmail({ to: u.email, subject: `Confirm your email for ${BRAND.name}`, text: `Confirm your email address: ${url}` });
+      await sendEmail({
+        to: u.email,
+        subject: `Confirm your email for ${BRAND.name}`,
+        text: `Welcome to ${BRAND.name}. Confirm your email address to finish creating your account.`,
+        button: { label: "Confirm email", url },
+      });
     },
   },
   socialProviders: google,
