@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { invitations, user as userTable, workspaceMembers } from "@/db/schema";
 import { can, canManageMember, PERMISSIONS, ROLE_LABELS, type Permission } from "@/lib/permissions";
 import { requireWorkspace } from "@/lib/session";
-import { InviteForm, MemberRow } from "./MemberControls";
+import { InvitationRow, InviteForm, MemberRow } from "./MemberControls";
 
 export const metadata = { title: "Members" };
 
@@ -48,7 +48,7 @@ export default async function Page({ params }: { params: Promise<{ workspaceId: 
                   editable={canManageMember(member, { userId: m.userId, role: m.role, active: true }, null)} isYou={m.userId === member.userId} />
               ))}
               {pending.map((i) => (
-                <tr key={i.id}><td><b style={{ fontSize: 13.5 }}>{i.email}</b><div className="muted" style={{ fontSize: 12 }}>Invitation pending</div></td><td>{ROLE_LABELS[i.role]}</td><td /></tr>
+                <InvitationRow key={i.id} workspaceId={workspaceId} inv={i} manage={manage} />
               ))}
             </tbody>
           </table>
