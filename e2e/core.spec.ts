@@ -324,8 +324,11 @@ test("a post deleted on the platform shows as a red, struck-through entry and on
   await go(page, base);
   const alert = page.locator(".ov-alert", { hasText: "is no longer on Facebook" });
   await expect(alert).toBeVisible();
+  // The alert hides at once; wait for the server to save the dismissal before reloading, or the reload cancels it.
+  const saved = page.waitForResponse((r) => r.request().method() === "POST" && Boolean(r.request().headers()["next-action"]));
   await alert.getByRole("button", { name: "Dismiss this alert" }).click();
   await expect(alert).toBeHidden();
+  await saved;
   await page.reload();
   await expect(page.locator(".ov-alert", { hasText: "is no longer on Facebook" })).toHaveCount(0);
 });
