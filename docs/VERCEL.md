@@ -13,6 +13,8 @@ The whole product can run on Vercel. There is no always-on worker: scheduled job
 
 **Vercel Pro is needed.** The publishing job runs every minute, and the free (Hobby) plan only allows one run a day, so a deploy with `vercel.json` as it is will be refused there. Posts are also sent right after you press Publish now, but scheduled times only work with the every-minute job.
 
+**Region.** `vercel.json` runs the functions in Mumbai (`bom1`). Keep the database and Redis in the same region (Supabase `ap-south-1`); if you host them elsewhere, change `regions` to match, or every query crosses continents and pages feel slow.
+
 ## 1. Accounts and services
 
 **Supabase** (database). Create a project. Under *Connect* copy two addresses and put your database password in them:
