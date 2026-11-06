@@ -11,8 +11,11 @@ const API = "https://www.googleapis.com/drive/v3/files";
 
 const env = (name: string) => process.env[name]?.trim() || "";
 
-/** The OAuth client used in the browser. Falls back to the Google sign-in client, which works if Drive is enabled in the same project. */
-const clientId = () => env("GOOGLE_DRIVE_CLIENT_ID") || env("GOOGLE_CLIENT_ID");
+/**
+ * The OAuth client used in the browser. Falls back to the Google sign-in client, then to the YouTube publishing
+ * client; either works when Drive is enabled in its project and APP_URL is one of its JavaScript origins.
+ */
+const clientId = () => env("GOOGLE_DRIVE_CLIENT_ID") || env("GOOGLE_CLIENT_ID") || env("GOOGLE_PUBLISH_CLIENT_ID");
 
 /** Google's "app ID" is the Cloud project number, which is also the start of every client ID from that project. */
 export function appIdFrom(id: string, override = "") {

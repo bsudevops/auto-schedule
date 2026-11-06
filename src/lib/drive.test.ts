@@ -16,8 +16,11 @@ describe("Google Drive config", () => {
   it("is off until a client ID and an API key are set", () => {
     delete process.env.GOOGLE_DRIVE_CLIENT_ID;
     delete process.env.GOOGLE_CLIENT_ID;
+    delete process.env.GOOGLE_PUBLISH_CLIENT_ID;
     process.env.GOOGLE_DRIVE_API_KEY = "key";
     expect(driveConfig()).toBeNull();
+    process.env.GOOGLE_PUBLISH_CLIENT_ID = "55-yt.apps.googleusercontent.com";
+    expect(driveConfig()?.clientId).toBe("55-yt.apps.googleusercontent.com");
     process.env.GOOGLE_CLIENT_ID = "42-x.apps.googleusercontent.com";
     expect(driveConfig()).toEqual({ clientId: "42-x.apps.googleusercontent.com", apiKey: "key", appId: "42" });
     process.env.GOOGLE_DRIVE_CLIENT_ID = "7-y.apps.googleusercontent.com";

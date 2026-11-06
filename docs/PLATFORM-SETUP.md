@@ -108,7 +108,7 @@ The app asks only for the `drive.file` permission, which lets it open the files 
 4. Under *Credentials*, choose *Create credentials → API key*. Edit it: under *Application restrictions* pick *Websites* and add `{APP_URL}/*`; under *API restrictions* allow only the **Google Picker API** and **Google Drive API**. This key is visible in the browser by design, so the restrictions are what protect it.
 5. Set in `.env`:
    - `GOOGLE_DRIVE_API_KEY`: the API key from step 4.
-   - `GOOGLE_DRIVE_CLIENT_ID`: the client ID from step 3. Leave it empty to reuse `GOOGLE_CLIENT_ID`.
+   - `GOOGLE_DRIVE_CLIENT_ID`: the client ID from step 3. Leave it empty to reuse `GOOGLE_CLIENT_ID`, or `GOOGLE_PUBLISH_CLIENT_ID` (the YouTube client) when there's no sign-in client. Whichever client is used needs step 3's JavaScript origin.
    - `GOOGLE_DRIVE_APP_ID`: optional. It's the project number (*IAM & Admin → Settings*), which is also the digits at the start of the client ID, so it's filled in from that when empty.
 6. Restart the app (`npm run dev`, or redeploy on Vercel). The page's security policy only allows Google's Picker once `GOOGLE_DRIVE_API_KEY` is set, and it's read when the app starts or builds.
 
