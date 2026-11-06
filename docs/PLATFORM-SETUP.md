@@ -96,6 +96,24 @@ Nothing to set up on the server. On the Channels page, enter the server the acco
 
 Nothing to set up on the server. On the Channels page, paste an API key from dev.to under *Settings → Extensions → DEV Community API Keys*. The first line of a post becomes the article title, and up to four hashtags become its tags.
 
+## Google Drive (choosing post media)
+
+Not a channel: this lets people pick photos and videos for a post straight from their Google Drive (and shared drives) in the composer, instead of uploading them first. **Add media** then opens on a *Google Drive* tab; uploading and the media library stay on the next tab.
+
+The app asks only for the `drive.file` permission, which lets it open the files the person picks and nothing else in their Drive. Google treats this as a non-sensitive scope, so the consent screen doesn't need Google's verification. Each picked file is copied into the workspace's media storage (the platforms fetch media by public URL, so they can't post a file straight from Drive) and counts towards the workspace's 5 GB. The Google access token stays in the browser tab for about an hour and is only passed to the server to download those files; it's never saved.
+
+1. At console.cloud.google.com, open the project that holds your Google sign-in client (or create one). Under *APIs & Services → Library*, enable the **Google Drive API** and the **Google Picker API**.
+2. Under *APIs & Services → OAuth consent screen* (*Google Auth Platform → Data access*), add the scope `https://www.googleapis.com/auth/drive.file`. While the app's publishing status is *Testing*, add each person under *Test users*; choose *In production* to let anyone use it.
+3. Under *Credentials*, open your **OAuth client ID** of type *Web application* (the Google sign-in one works) or create a new one, and add your `APP_URL` (for example `https://app.example.com`, and `http://localhost:3000` for development) under **Authorized JavaScript origins**. No redirect URL is needed.
+4. Under *Credentials*, choose *Create credentials → API key*. Edit it: under *Application restrictions* pick *Websites* and add `{APP_URL}/*`; under *API restrictions* allow only the **Google Picker API** and **Google Drive API**. This key is visible in the browser by design, so the restrictions are what protect it.
+5. Set in `.env`:
+   - `GOOGLE_DRIVE_API_KEY`: the API key from step 4.
+   - `GOOGLE_DRIVE_CLIENT_ID`: the client ID from step 3. Leave it empty to reuse `GOOGLE_CLIENT_ID`.
+   - `GOOGLE_DRIVE_APP_ID`: optional. It's the project number (*IAM & Admin → Settings*), which is also the digits at the start of the client ID, so it's filled in from that when empty.
+6. Restart the app (`npm run dev`, or redeploy on Vercel). The page's security policy only allows Google's Picker once `GOOGLE_DRIVE_API_KEY` is set, and it's read when the app starts or builds.
+
+Images up to 20 MB and videos up to 300 MB can be picked, up to 10 files at a time. Google Docs, Sheets and other non-media files are hidden in the picker. If the Google sign-in window doesn't open, allow pop-ups for the app's address.
+
 ## How publishing works
 
 - The worker (`npm run worker`) checks for due posts every 15 seconds and claims each one atomically, so running several workers is safe.

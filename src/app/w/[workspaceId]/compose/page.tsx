@@ -4,6 +4,8 @@ import { Composer } from "./Composer";
 import { loadComposer } from "./load";
 
 export const metadata = { title: "Create post" };
+// Copying a large video in from Google Drive can take a while.
+export const maxDuration = 300;
 
 export default async function Page({ params, searchParams }: { params: Promise<{ workspaceId: string }>; searchParams: Promise<{ media?: string; idea?: string; date?: string; time?: string; from?: string }> }) {
   const { workspaceId } = await params;

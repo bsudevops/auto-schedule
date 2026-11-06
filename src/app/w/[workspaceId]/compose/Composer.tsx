@@ -10,7 +10,9 @@ import { PLATFORMS } from "@/lib/platforms";
 import { addTags } from "@/lib/hashtags";
 import { checkPost } from "@/lib/post-rules";
 import { uploadFiles } from "../media/MediaControls";
+import type { DriveConfig } from "@/lib/drive";
 import { AiPanel, HashtagMenu, StockSearch, type HashtagSet } from "./ComposerTools";
+import { DrivePicker } from "./DrivePicker";
 import { YoutubeSettings, ytOptions } from "./YoutubeSettings";
 
 type Mode = "draft" | "now" | "schedule" | "queue";
@@ -30,6 +32,8 @@ export type ComposerProps = {
   /** Gemini is set up, so captions and titles can be written from the media. */
   mediaAiEnabled?: boolean;
   stockEnabled: boolean;
+  /** Google Drive is set up and this person may add media: the picker opens on Drive. */
+  drive?: DriveConfig | null;
   initial: {
     postId?: string;
     channelIds: string[];
@@ -288,8 +292,13 @@ export function Composer(props: ComposerProps) {
         </fieldset>
       )}
 
-      {picker && <MediaPicker workspaceId={workspaceId} media={media} chosen={mediaIds} stockEnabled={props.stockEnabled}
-        onStock={(m) => { setMedia((all) => [m, ...all.filter((x) => x.id !== m.id)]); setMediaIds((ids) => (ids.includes(m.id) ? ids : [...ids, m.id].slice(0, 10))); setPicker(false); }} onClose={() => setPicker(false)} onPick={(id) => { setMediaIds((ids) => (ids.includes(id) ? ids : [...ids, id].slice(0, 10))); setPicker(false); }} />}
+      {picker && <MediaPicker workspaceId={workspaceId} media={media} chosen={mediaIds} stockEnabled={props.stockEnabled} drive={props.drive ?? null}
+        onAdded={(added) => {
+          setMedia((all) => [...added, ...all.filter((x) => !added.some((a) => a.id === x.id))]);
+          setMediaIds((ids) => [...ids, ...added.map((a) => a.id).filter((id) => !ids.includes(id))].slice(0, 10));
+          setPicker(false);
+        }}
+        onClose={() => setPicker(false)} onPick={(id) => { setMediaIds((ids) => (ids.includes(id) ? ids : [...ids, id].slice(0, 10))); setPicker(false); }} />}
     </>
   );
 }
@@ -307,9 +316,15 @@ function DeleteButton({ workspaceId, postId }: { workspaceId: string; postId: st
   );
 }
 
-function MediaPicker({ workspaceId, media, chosen, stockEnabled, onStock, onClose, onPick }: { workspaceId: string; media: Media[]; chosen: string[]; stockEnabled: boolean; onStock: (m: Media) => void; onClose: () => void; onPick: (id: string) => void }) {
+function MediaPicker({ workspaceId, media, chosen, stockEnabled, drive, onAdded, onClose, onPick }: { workspaceId: string; media: Media[]; chosen: string[]; stockEnabled: boolean; drive: DriveConfig | null; onAdded: (m: Media[]) => void; onClose: () => void; onPick: (id: string) => void }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"library" | "stock">("library");
+  // Google Drive comes first when it's set up; uploads and the library stay one tab away.
+  const [tab, setTab] = useState<"drive" | "library" | "stock">(drive ? "drive" : "library");
+  const tabs = [
+    ...(drive ? [{ id: "drive" as const, label: "Google Drive" }] : []),
+    { id: "library" as const, label: drive ? "Upload or library" : "Your library" },
+    ...(stockEnabled ? [{ id: "stock" as const, label: "Free stock photos" }] : []),
+  ];
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   return (
@@ -317,13 +332,15 @@ function MediaPicker({ workspaceId, media, chosen, stockEnabled, onStock, onClos
       <div className="modal" role="dialog" aria-modal="true" aria-label="Add media">
         <div className="modal-h"><h2>Add media</h2><button type="button" className="icon-btn" aria-label="Close" onClick={onClose}><Icon name="x" /></button></div>
         <div className="modal-b">
-          {stockEnabled && (
-            <div className="seg" role="tablist" style={{ alignSelf: "flex-start" }}>
-              <button type="button" role="tab" aria-selected={tab === "library"} className={tab === "library" ? "on" : ""} onClick={() => setTab("library")}>Your library</button>
-              <button type="button" role="tab" aria-selected={tab === "stock"} className={tab === "stock" ? "on" : ""} onClick={() => setTab("stock")}>Free stock photos</button>
+          {tabs.length > 1 && (
+            <div className="seg" role="tablist" style={{ alignSelf: "flex-start", flexWrap: "wrap" }}>
+              {tabs.map((t) => (
+                <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>{t.label}</button>
+              ))}
             </div>
           )}
-          {tab === "stock" ? <StockSearch workspaceId={workspaceId} onAdded={onStock} /> : <>
+          {tab === "drive" && drive ? <DrivePicker workspaceId={workspaceId} config={drive} max={10 - chosen.length} onAdded={onAdded} />
+          : tab === "stock" ? <StockSearch workspaceId={workspaceId} onAdded={(m) => onAdded([m])} /> : <>
           <label className="btn" style={{ cursor: "pointer", width: "max-content" }}>
             <Icon name="upload" /> {busy ? "Uploading…" : "Upload from your computer"}
             <input type="file" hidden multiple accept="image/*,video/mp4,video/quicktime,video/webm" disabled={busy}

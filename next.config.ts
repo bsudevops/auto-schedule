@@ -8,15 +8,23 @@ const uploadOrigin =
     ? new URL(process.env.S3_ENDPOINT_URL || `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.S3_REGION || "us-east-1"}.amazonaws.com`).origin
     : "";
 
+// Google Drive picker (only when it's set up): Google's sign-in and Picker scripts, the Picker's frame and Drive thumbnails.
+const drive = Boolean(process.env.GOOGLE_DRIVE_API_KEY?.trim());
+const driveScripts = drive ? " https://accounts.google.com https://apis.google.com" : "";
+const driveFrames = drive ? " https://accounts.google.com https://docs.google.com https://drive.google.com https://content.googleapis.com" : "";
+const driveImages = drive ? " https://*.googleusercontent.com https://ssl.gstatic.com https://www.gstatic.com" : "";
+const driveConnect = drive ? " https://accounts.google.com https://www.googleapis.com https://content.googleapis.com" : "";
+
 // Strict CSP. Uploaded media is served from a separate storage origin, never from the app origin.
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}${driveScripts}`,
+  `style-src 'self' 'unsafe-inline'${drive ? " https://accounts.google.com" : ""}`,
   "font-src 'self'",
-  `img-src 'self' data: blob: ${mediaOrigin} https://images.pexels.com`.trim(),
+  `img-src 'self' data: blob: ${mediaOrigin} https://images.pexels.com${driveImages}`.trim(),
   `media-src 'self' blob: ${mediaOrigin}`.trim(),
-  `connect-src 'self' ${uploadOrigin}`.trim(),
+  `connect-src 'self' ${uploadOrigin}${driveConnect}`.trim(),
+  `frame-src 'self'${driveFrames}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
