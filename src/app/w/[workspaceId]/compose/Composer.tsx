@@ -80,6 +80,54 @@ export function Composer(props: ComposerProps) {
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const textRef = useRef<HTMLTextAreaElement>(null);
+  // Files dragged from the computer onto the editor are uploaded and added to the post.
+  const [dropping, setDropping] = useState(false);
+  const [uploading, setUploading] = useState(0);
+  const [dropErrors, setDropErrors] = useState<string[]>([]);
+  const dragDepth = useRef(0);
+  const dragFrom = useRef<number | null>(null);
+
+  // A file dropped anywhere else on the page would make the browser open it and leave the composer.
+  useEffect(() => {
+    const stop = (e: DragEvent) => { if (e.dataTransfer?.types.includes("Files")) e.preventDefault(); };
+    window.addEventListener("dragover", stop);
+    window.addEventListener("drop", stop);
+    return () => { window.removeEventListener("dragover", stop); window.removeEventListener("drop", stop); };
+  }, []);
+
+  async function addFiles(list: FileList | File[]) {
+    const files = Array.from(list).filter((f) => f.type.startsWith("image/") || f.type.startsWith("video/"));
+    const skipped = list.length - files.length;
+    const room = 10 - mediaIds.length;
+    if (!files.length) { setDropErrors(skipped ? ["Only images and videos can be added to a post."] : []); return; }
+    if (room <= 0) { setDropErrors(["A post can have up to 10 files. Remove one to add another."]); return; }
+    const batch = files.slice(0, room);
+    setDropErrors([]);
+    setUploading(batch.length);
+    const r = await uploadFiles(workspaceId, batch);
+    setUploading(0);
+    setMediaIds((ids) => [...ids, ...r.ids.filter((id) => !ids.includes(id))].slice(0, 10));
+    setDropErrors([
+      ...r.errors,
+      ...(files.length > room ? [`Only ${room} more file${room === 1 ? "" : "s"} fit in this post, so the rest were left out.`] : []),
+      ...(skipped ? ["Only images and videos can be added to a post."] : []),
+    ]);
+    router.refresh();
+  }
+
+  const isFiles = (e: React.DragEvent) => e.dataTransfer.types.includes("Files");
+  const dropZone = readonly ? {} : {
+    onDragEnter: (e: React.DragEvent) => { if (!isFiles(e)) return; e.preventDefault(); dragDepth.current += 1; setDropping(true); },
+    onDragOver: (e: React.DragEvent) => { if (!isFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; },
+    onDragLeave: (e: React.DragEvent) => { if (!isFiles(e)) return; dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDropping(false); },
+    onDrop: (e: React.DragEvent) => { if (!isFiles(e)) return; e.preventDefault(); dragDepth.current = 0; setDropping(false); void addFiles(e.dataTransfer.files); },
+  };
+
+  /** Drag a thumbnail onto another to change the order (the first file is the cover). */
+  function moveMedia(from: number, to: number) {
+    if (from === to) return;
+    setMediaIds((ids) => { const n = [...ids]; const [x] = n.splice(from, 1); n.splice(to, 0, x!); return n; });
+  }
 
   const selected = channels.filter((c) => chIds.includes(c.id));
   const activeTab = selected.some((c) => c.id === tab) ? tab : "all";
@@ -154,7 +202,8 @@ export function Composer(props: ComposerProps) {
                 </div>
               </div></section>
 
-              <section className="card">
+              <section className={`card drop-zone${dropping ? " dropping" : ""}`} {...dropZone}>
+                {dropping && <div className="drop-hint" aria-hidden="true"><Icon name="upload" size={26} /><b>Drop to add to this post</b><span>Images and videos, up to 10 files</span></div>}
                 <div className="editor-tabs" role="tablist">
                   <button type="button" role="tab" aria-selected={activeTab === "all"} className={activeTab === "all" ? "on" : ""} onClick={() => setTab("all")}>All channels</button>
                   {selected.map((c) => (
@@ -173,14 +222,21 @@ export function Composer(props: ComposerProps) {
                 <textarea ref={textRef} className="editor-area" id="caption" aria-label="Caption" placeholder="What do you want to share?" value={text} onChange={(e) => setText(e.target.value)} />
                 <div className="media-strip">
                   {chosenMedia.map((m, i) => (
-                    <div className="m" key={m.id} style={{ overflow: "hidden" }}>
+                    <div className="m" key={m.id} style={{ overflow: "hidden" }} title={chosenMedia.length > 1 ? "Drag to reorder" : undefined}
+                      draggable={!readonly && chosenMedia.length > 1}
+                      onDragStart={(e) => { dragFrom.current = i; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", m.id); }}
+                      onDragOver={(e) => { if (dragFrom.current != null) e.preventDefault(); }}
+                      onDrop={(e) => { if (dragFrom.current == null) return; e.preventDefault(); e.stopPropagation(); moveMedia(dragFrom.current, i); dragFrom.current = null; }}
+                      onDragEnd={() => { dragFrom.current = null; }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       {m.kind === "image" ? <img src={m.thumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10 }} /> : <video src={m.url} muted style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10 }} />}
                       <button type="button" aria-label={`Remove ${m.filename}`} onClick={() => setMediaIds((ids) => ids.filter((_, j) => j !== i))}>×</button>
                     </div>
                   ))}
-                  <button type="button" className="m add" aria-label="Add media" onClick={() => setPicker(true)}>+</button>
+                  {Array.from({ length: uploading }, (_, k) => <div className="m uploading" key={`up${k}`} aria-label="Uploading"><span className="spin" /></div>)}
+                  <button type="button" className="m add" aria-label="Add media" title="Add media, or drag files here" onClick={() => setPicker(true)}>+</button>
                 </div>
+                {dropErrors.length > 0 && <div style={{ padding: "0 18px 12px" }}>{dropErrors.map((m) => <p key={m} className="err" role="alert" style={{ margin: "2px 0" }}>{m}</p>)}</div>}
                 <div className="editor-tools">
                   <button type="button" className="icon-btn" title="Add media" aria-label="Add media" onClick={() => setPicker(true)}><Icon name="img" /></button>
                   <details style={{ position: "relative" }}>
@@ -333,6 +389,16 @@ function MediaPicker({ workspaceId, media, chosen, stockEnabled, drive, onAdded,
   ];
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [over, setOver] = useState(false);
+  async function upload(files: FileList | File[]) {
+    if (!files.length) return;
+    setBusy(true);
+    const r = await uploadFiles(workspaceId, files);
+    setBusy(false);
+    setErrors(r.errors);
+    router.refresh();
+    if (r.ids.length && !r.errors.length) r.ids.forEach(onPick);
+  }
   return (
     <div className="scrim" onClick={(e) => e.target === e.currentTarget && onClose()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
       <div className="modal" role="dialog" aria-modal="true" aria-label="Add media">
@@ -347,18 +413,15 @@ function MediaPicker({ workspaceId, media, chosen, stockEnabled, drive, onAdded,
           )}
           {tab === "drive" && drive ? <DrivePicker workspaceId={workspaceId} config={drive} max={10 - chosen.length} onAdded={onAdded} />
           : tab === "stock" ? <StockSearch workspaceId={workspaceId} onAdded={(m) => onAdded([m])} /> : <>
-          <label className="btn" style={{ cursor: "pointer", width: "max-content" }}>
-            <Icon name="upload" /> {busy ? "Uploading…" : "Upload from your computer"}
+          <label className={`upload-drop${over ? " over" : ""}`}
+            onDragOver={(e) => { if (!e.dataTransfer.types.includes("Files")) return; e.preventDefault(); setOver(true); }}
+            onDragLeave={() => setOver(false)}
+            onDrop={(e) => { if (!e.dataTransfer.types.includes("Files")) return; e.preventDefault(); setOver(false); void upload(e.dataTransfer.files); }}>
+            <Icon name="upload" size={22} />
+            <b>{busy ? "Uploading…" : "Drag files here or click to upload"}</b>
+            <span className="muted">Images and videos from your computer</span>
             <input type="file" hidden multiple accept="image/*,video/mp4,video/quicktime,video/webm" disabled={busy}
-              onChange={async (e) => {
-                if (!e.target.files?.length) return;
-                setBusy(true);
-                const r = await uploadFiles(workspaceId, e.target.files);
-                setBusy(false);
-                setErrors(r.errors);
-                router.refresh();
-                if (r.ids[0] && !r.errors.length) onPick(r.ids[0]);
-              }} />
+              onChange={(e) => { if (e.target.files?.length) void upload(e.target.files); }} />
           </label>
           {errors.map((m) => <p key={m} className="err" role="alert">{m}</p>)}
           {media.length ? (
