@@ -222,7 +222,7 @@ export function Composer(props: ComposerProps) {
                 <textarea ref={textRef} className="editor-area" id="caption" aria-label="Caption" placeholder="What do you want to share?" value={text} onChange={(e) => setText(e.target.value)} />
                 <div className="media-strip">
                   {chosenMedia.map((m, i) => (
-                    <div className="m" key={m.id} style={{ overflow: "hidden" }} title={chosenMedia.length > 1 ? "Drag to reorder" : undefined}
+                    <div className="m" key={m.id} title={chosenMedia.length > 1 ? "Drag to reorder" : undefined}
                       draggable={!readonly && chosenMedia.length > 1}
                       onDragStart={(e) => { dragFrom.current = i; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", m.id); }}
                       onDragOver={(e) => { if (dragFrom.current != null) e.preventDefault(); }}
@@ -230,7 +230,7 @@ export function Composer(props: ComposerProps) {
                       onDragEnd={() => { dragFrom.current = null; }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       {m.kind === "image" ? <img src={m.thumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10 }} /> : <video src={m.url} muted style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 10 }} />}
-                      <button type="button" aria-label={`Remove ${m.filename}`} onClick={() => setMediaIds((ids) => ids.filter((_, j) => j !== i))}>×</button>
+                      <button type="button" className="m-remove" aria-label={`Remove ${m.filename}`} title="Remove" onClick={() => setMediaIds((ids) => ids.filter((_, j) => j !== i))}><Icon name="x" size={12} /></button>
                     </div>
                   ))}
                   {Array.from({ length: uploading }, (_, k) => <div className="m uploading" key={`up${k}`} aria-label="Uploading"><span className="spin" /></div>)}
