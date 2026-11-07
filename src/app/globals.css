@@ -706,3 +706,5 @@ table.tbl{width:100%;border-collapse:collapse}
 .upload-drop:hover,.upload-drop.over{border-color:var(--sky);background:var(--panel)}
 .upload-drop span{font-size:12.5px}
 @media (prefers-reduced-motion:reduce){.media-strip .m.uploading .spin{animation-duration:2.4s}}
+.upload-drop.big{padding:44px 20px;gap:6px}
+.picker-lib{display:flex;flex-direction:column;gap:12px;max-height:min(52vh,460px);overflow-y:auto;padding:2px}

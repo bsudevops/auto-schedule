@@ -360,7 +360,7 @@ export function Composer(props: ComposerProps) {
           setMediaIds((ids) => [...ids, ...added.map((a) => a.id).filter((id) => !ids.includes(id))].slice(0, 10));
           setPicker(false);
         }}
-        onClose={() => setPicker(false)} onPick={(id) => { setMediaIds((ids) => (ids.includes(id) ? ids : [...ids, id].slice(0, 10))); setPicker(false); }} />}
+        onClose={() => setPicker(false)} onPick={(id, keepOpen) => { setMediaIds((ids) => (ids.includes(id) ? ids : [...ids, id].slice(0, 10))); if (!keepOpen) setPicker(false); }} />}
     </>
   );
 }
@@ -378,18 +378,23 @@ function DeleteButton({ workspaceId, postId }: { workspaceId: string; postId: st
   );
 }
 
-function MediaPicker({ workspaceId, media, chosen, stockEnabled, drive, onAdded, onClose, onPick }: { workspaceId: string; media: Media[]; chosen: string[]; stockEnabled: boolean; drive: DriveConfig | null; onAdded: (m: Media[]) => void; onClose: () => void; onPick: (id: string) => void }) {
+function MediaPicker({ workspaceId, media, chosen, stockEnabled, drive, onAdded, onClose, onPick }: { workspaceId: string; media: Media[]; chosen: string[]; stockEnabled: boolean; drive: DriveConfig | null; onAdded: (m: Media[]) => void; onClose: () => void; onPick: (id: string, keepOpen?: boolean) => void }) {
   const router = useRouter();
-  // Google Drive comes first when it's set up; uploads and the library stay one tab away.
-  const [tab, setTab] = useState<"drive" | "library" | "stock">(drive ? "drive" : "library");
+  // Upload is the default (Drive first when it's set up). The library has its own tab, so a big library
+  // doesn't push the upload area off screen.
+  const [tab, setTab] = useState<"drive" | "upload" | "library" | "stock">(drive ? "drive" : "upload");
   const tabs = [
     ...(drive ? [{ id: "drive" as const, label: "Google Drive" }] : []),
-    { id: "library" as const, label: drive ? "Upload or library" : "Your library" },
+    { id: "upload" as const, label: "Upload" },
+    { id: "library" as const, label: "From library" },
     ...(stockEnabled ? [{ id: "stock" as const, label: "Free stock photos" }] : []),
   ];
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [over, setOver] = useState(false);
+  const [q, setQ] = useState("");
+  const [shown, setShown] = useState(24);
+  const found = q.trim() ? media.filter((m) => m.filename.toLowerCase().includes(q.trim().toLowerCase())) : media;
   async function upload(files: FileList | File[]) {
     if (!files.length) return;
     setBusy(true);
@@ -397,7 +402,9 @@ function MediaPicker({ workspaceId, media, chosen, stockEnabled, drive, onAdded,
     setBusy(false);
     setErrors(r.errors);
     router.refresh();
-    if (r.ids.length && !r.errors.length) r.ids.forEach(onPick);
+    // Only the files just uploaded go into the post; the dialog closes unless something needs attention.
+    if (r.errors.length) r.ids.forEach((id) => onPick(id, true));
+    else r.ids.forEach((id) => onPick(id));
   }
   return (
     <div className="scrim" onClick={(e) => e.target === e.currentTarget && onClose()} onKeyDown={(e) => e.key === "Escape" && onClose()}>
@@ -412,32 +419,38 @@ function MediaPicker({ workspaceId, media, chosen, stockEnabled, drive, onAdded,
             </div>
           )}
           {tab === "drive" && drive ? <DrivePicker workspaceId={workspaceId} config={drive} max={10 - chosen.length} onAdded={onAdded} />
-          : tab === "stock" ? <StockSearch workspaceId={workspaceId} onAdded={(m) => onAdded([m])} /> : <>
-          <label className={`upload-drop${over ? " over" : ""}`}
+          : tab === "stock" ? <StockSearch workspaceId={workspaceId} onAdded={(m) => onAdded([m])} />
+          : tab === "upload" ? <>
+          <label className={`upload-drop big${over ? " over" : ""}`}
             onDragOver={(e) => { if (!e.dataTransfer.types.includes("Files")) return; e.preventDefault(); setOver(true); }}
             onDragLeave={() => setOver(false)}
             onDrop={(e) => { if (!e.dataTransfer.types.includes("Files")) return; e.preventDefault(); setOver(false); void upload(e.dataTransfer.files); }}>
-            <Icon name="upload" size={22} />
+            <Icon name="upload" size={26} />
             <b>{busy ? "Uploading…" : "Drag files here or click to upload"}</b>
-            <span className="muted">Images and videos from your computer</span>
+            <span className="muted">Images and videos from your computer. They are added to this post and saved in your library.</span>
             <input type="file" hidden multiple accept="image/*,video/mp4,video/quicktime,video/webm" disabled={busy}
               onChange={(e) => { if (e.target.files?.length) void upload(e.target.files); }} />
           </label>
           {errors.map((m) => <p key={m} className="err" role="alert">{m}</p>)}
-          {media.length ? (
-            <div className="media-grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))" }}>
-              {media.map((m) => (
-                <button type="button" key={m.id} className={`asset${chosen.includes(m.id) ? " on" : ""}`} onClick={() => onPick(m.id)}>
-                  <div className="img">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    {m.kind === "image" ? <img src={m.thumb} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <video src={m.url} muted preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
-                    <span className="kind">{m.kind === "image" ? "Image" : "Video"}</span>
-                  </div>
-                  <div className="meta"><b>{m.filename}</b></div>
-                </button>
-              ))}
+          </> : <>
+          {media.length > 8 && <input className="input" type="search" placeholder="Search by file name" value={q} onChange={(e) => { setQ(e.target.value); setShown(24); }} aria-label="Search the library" />}
+          {found.length ? (
+            <div className="picker-lib">
+              <div className="media-grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))" }}>
+                {found.slice(0, shown).map((m) => (
+                  <button type="button" key={m.id} className={`asset${chosen.includes(m.id) ? " on" : ""}`} onClick={() => onPick(m.id)}>
+                    <div className="img">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      {m.kind === "image" ? <img src={m.thumb} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <video src={m.url} muted preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                      <span className="kind">{m.kind === "image" ? "Image" : "Video"}</span>
+                    </div>
+                    <div className="meta"><b>{m.filename}</b></div>
+                  </button>
+                ))}
+              </div>
+              {found.length > shown && <button type="button" className="btn ghost sm" style={{ alignSelf: "center" }} onClick={() => setShown((n) => n + 24)}>Show more ({found.length - shown} left)</button>}
             </div>
-          ) : <p className="muted">Your media library is empty. Upload a file to get started.</p>}
+          ) : <p className="muted">{media.length ? "No files match that name." : "Your media library is empty. Upload a file to get started."}</p>}
           </>}
         </div>
       </div>
