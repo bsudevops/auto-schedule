@@ -2,17 +2,18 @@
 import { useActionState } from "react";
 import { updateWorkspace } from "@/app/actions/workspace";
 import { WorkspaceFields } from "@/components/WorkspaceFields";
+import { LogoField } from "./LogoField";
 
 type Ws = { id: string; name: string; timezone: string; color: string; defaultHashtags: string; defaultFirstComment: string; savedReplies: string[] };
 
-export function WorkspaceForm({ workspace, canEdit }: { workspace: Ws; canEdit: boolean }) {
+export function WorkspaceForm({ workspace, logoUrl, canEdit }: { workspace: Ws; logoUrl: string | null; canEdit: boolean }) {
   const [state, action, pending] = useActionState(updateWorkspace.bind(null, workspace.id), undefined);
   return (
     <form action={action} className="card card-b">
       {!canEdit && <p className="banner" style={{ marginBottom: 12 }}>Only owners and managers can change these settings.</p>}
       <div className="set-row">
-        <div><h3>Workspace</h3><p>Name, time zone and colour for this brand. Posting times use this time zone.</p></div>
-        <div className="stack" style={{ maxWidth: 520 }}><WorkspaceFields name={workspace.name} timezone={workspace.timezone} color={workspace.color} disabled={!canEdit} /></div>
+        <div><h3>Workspace</h3><p>Name, logo, time zone and colour for this brand. Posting times use this time zone.</p></div>
+        <div className="stack" style={{ maxWidth: 520 }}><LogoField workspaceId={workspace.id} name={workspace.name} color={workspace.color} logoUrl={logoUrl} disabled={!canEdit} /><WorkspaceFields name={workspace.name} timezone={workspace.timezone} color={workspace.color} disabled={!canEdit} /></div>
       </div>
       <div className="set-row">
         <div><h3>Post defaults</h3><p>Prefilled on every new post in this workspace.</p></div>

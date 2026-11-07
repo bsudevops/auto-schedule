@@ -11,6 +11,7 @@ import { BRAND } from "@/lib/brand";
 import { DELETION_GRACE_DAYS } from "@/lib/org-deletion";
 import { can, ROLE_LABELS } from "@/lib/permissions";
 import { listUserWorkspaces, requireWorkspace } from "@/lib/session";
+import { workspaceLogoUrl } from "@/lib/workspace-logo";
 
 export default async function WorkspaceLayout({ children, params }: { children: React.ReactNode; params: Promise<{ workspaceId: string }> }) {
   const { workspaceId } = await params;
@@ -23,7 +24,7 @@ export default async function WorkspaceLayout({ children, params }: { children: 
     db.select({ n: count() }).from(notifications).where(and(mine, isNull(notifications.readAt))),
     db.select({ deletionRequestedAt: organizations.deletionRequestedAt }).from(organizations).where(eq(organizations.id, workspace.orgId)),
   ]);
-  const current = { id: workspace.id, name: workspace.name, color: workspace.color, orgName };
+  const current = { id: workspace.id, name: workspace.name, color: workspace.color, orgName, logoUrl: workspaceLogoUrl(workspace.iconKey) };
 
   return (
     <div className="app">

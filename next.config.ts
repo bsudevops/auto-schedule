@@ -34,6 +34,8 @@ const csp = [
 const config: NextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ["bullmq", "ioredis"],
+  // Room for a brand logo upload (the browser shrinks it first; the server caps it at 2 MB).
+  experimental: { serverActions: { bodySizeLimit: "3mb" } },
   async headers() {
     return [
       {

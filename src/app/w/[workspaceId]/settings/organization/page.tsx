@@ -1,3 +1,4 @@
+import { WorkspaceIcon } from "@/components/WorkspaceIcon";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orgMembers } from "@/db/schema";
@@ -23,7 +24,7 @@ export default async function Page({ params }: { params: Promise<{ workspaceId: 
         <div className="card-b tbl-wrap">
           <table className="tbl"><tbody>
             {all.map((w) => (
-              <tr key={w.id}><td><div className="row"><span className="ws-ico" style={{ background: w.color }}>{w.name[0]}</span><b style={{ fontSize: 13.5 }}>{w.name}</b></div></td>
+              <tr key={w.id}><td><div className="row"><WorkspaceIcon name={w.name} color={w.color} logoUrl={w.logoUrl} /><b style={{ fontSize: 13.5 }}>{w.name}</b></div></td>
                 <td style={{ textAlign: "right" }}><Link className="btn sm" href={`/w/${w.id}`}>Open</Link></td></tr>
             ))}
           </tbody></table>

@@ -1,3 +1,4 @@
+import { WorkspaceIcon } from "@/components/WorkspaceIcon";
 import Link from "next/link";
 import { requireUser, listUserOrgs, listUserWorkspaces } from "@/lib/session";
 import { redirect } from "next/navigation";
@@ -71,7 +72,7 @@ export default async function Page() {
                         const n = upcomingOf(w.id);
                         return (
                           <Link key={w.id} href={`/w/${w.id}`} className="ws-tile">
-                            <span className="ws-mono" style={{ background: w.color }} aria-hidden>{w.name.trim()[0]?.toUpperCase()}</span>
+                            <WorkspaceIcon name={w.name} color={w.color} logoUrl={w.logoUrl} className="ws-mono" />
                             <span className="ws-body">
                               <b className="ws-name">{w.name}</b>
                               <span className="ws-sub">{w.role}{info.get(w.id)?.timezone ? `, ${info.get(w.id)!.timezone.replace(/_/g, " ")}` : ""}</span>
