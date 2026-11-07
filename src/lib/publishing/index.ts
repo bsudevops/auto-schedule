@@ -1,6 +1,6 @@
 import type { Platform } from "@/db/schema";
 import { facebookPublisher, instagramPublisher, metaProvider } from "./meta";
-import { linkedinProvider, linkedinPublisher } from "./linkedin";
+import { linkedinPagesProvider, linkedinProvider, linkedinPublisher } from "./linkedin";
 import { tiktokProvider, tiktokPublisher } from "./tiktok";
 import { threadsProvider, threadsPublisher } from "./threads";
 import { googleBusinessProvider, googleBusinessPublisher, youtubeProvider, youtubePublisher } from "./google";
@@ -13,6 +13,7 @@ import type { Provider, ProviderAdapter, Publisher } from "./types";
 export const PROVIDERS: Record<Provider, ProviderAdapter> = {
   meta: metaProvider,
   linkedin: linkedinProvider,
+  linkedin_pages: linkedinPagesProvider,
   tiktok: tiktokProvider,
   threads: threadsProvider,
   youtube: youtubeProvider,
@@ -39,6 +40,13 @@ export const PUBLISHERS: Partial<Record<Platform, Publisher>> = {
 
 export function providerFor(platform: Platform): ProviderAdapter | undefined {
   return Object.values(PROVIDERS).find((p) => p.platforms.includes(platform));
+}
+
+/** The provider that connected this channel: LinkedIn company pages may come from their own app. */
+export function providerForChannel(c: { platform: Platform; meta?: unknown }): ProviderAdapter | undefined {
+  const meta = (c.meta ?? {}) as { app?: string };
+  if (c.platform === "linkedin" && meta.app === "pages") return PROVIDERS.linkedin_pages;
+  return providerFor(c.platform);
 }
 
 export const isProvider = (s: string): s is Provider => s in PROVIDERS;

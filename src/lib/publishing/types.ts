@@ -21,7 +21,7 @@ export class PublishError extends Error {
   }
 }
 
-export type Provider = "meta" | "linkedin" | "tiktok" | "threads" | "youtube" | "google_business" | "pinterest" | "bluesky" | "mastodon" | "devto";
+export type Provider = "meta" | "linkedin" | "linkedin_pages" | "tiktok" | "threads" | "youtube" | "google_business" | "pinterest" | "bluesky" | "mastodon" | "devto";
 
 /** Extra input a connection needs before the platform's sign-in, such as a Mastodon server. Travels inside the encrypted state cookie. */
 export type ConnectContext = Record<string, string>;

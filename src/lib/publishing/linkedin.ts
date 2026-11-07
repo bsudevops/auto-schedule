@@ -8,6 +8,14 @@ import { PublishError, type ConnectedAccount, type ProviderAdapter, type Publish
 const apiVersion = () => env("LINKEDIN_API_VERSION") || "202410";
 const scopes = () => env("LINKEDIN_SCOPES") || "openid profile w_member_social";
 
+/**
+ * LinkedIn only grants the Community Management API (company pages) to an app with no other products,
+ * so pages can come from a second app: LINKEDIN_PAGES_CLIENT_ID / LINKEDIN_PAGES_CLIENT_SECRET.
+ * That app can't use Sign In with LinkedIn, so it lists the pages the person administers and nothing else.
+ */
+const PAGES_SCOPES = "r_organization_social w_organization_social rw_organization_admin r_organization_admin";
+const pagesScopes = () => env("LINKEDIN_PAGES_SCOPES") || PAGES_SCOPES;
+
 export function headers(token: string, json = true): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,
@@ -61,13 +69,7 @@ export const linkedinProvider: ProviderAdapter = {
     return `https://www.linkedin.com/oauth/v2/authorization?${q}`;
   },
   async exchangeCode(code, redirectUri) {
-    const res = await http("https://www.linkedin.com/oauth/v2/accessToken", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: form({ grant_type: "authorization_code", code, redirect_uri: redirectUri, client_id: env("LINKEDIN_CLIENT_ID"), client_secret: env("LINKEDIN_CLIENT_SECRET") }),
-    });
-    if (res.status >= 400) throw linkedinError(res, "Signing in with LinkedIn");
-    const tokens = tokenSet(res.body as { access_token: string; expires_in: number; refresh_token?: string });
+    const tokens = await exchangeWith(code, redirectUri, "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET");
     const t = tokens.accessToken;
     const base = { accessToken: t, refreshToken: tokens.refreshToken, expiresAt: tokens.expiresAt?.toISOString() ?? null, followers: null };
 
@@ -78,30 +80,67 @@ export const linkedinProvider: ProviderAdapter = {
       { ...base, platform: "linkedin", externalId: `person:${u.sub}`, handle: u.name ?? "LinkedIn profile", displayName: u.name ?? "LinkedIn profile", avatarUrl: u.picture ?? null, meta: { author: `urn:li:person:${u.sub}`, kind: "person" } },
     ];
 
-    if (scopes().includes("rw_organization_admin")) {
-      const acl = await http(`https://api.linkedin.com/rest/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED`, { headers: headers(t, false) });
-      if (acl.status < 400) {
-        const orgs = ((acl.body as { elements?: { organization: string }[] }).elements ?? []).map((e) => e.organization);
-        for (const urn of orgs.slice(0, 50)) {
-          const id = urn.split(":").pop()!;
-          const org = await http(`https://api.linkedin.com/rest/organizations/${encodeURIComponent(id)}`, { headers: headers(t, false) });
-          if (org.status >= 400) continue;
-          const o = org.body as { localizedName?: string; vanityName?: string };
-          out.push({ ...base, platform: "linkedin", externalId: `organization:${id}`, handle: o.vanityName ?? o.localizedName ?? id, displayName: o.localizedName ?? "LinkedIn page", avatarUrl: null, meta: { author: urn, kind: "organization" } });
-        }
-      }
-    }
+    if (scopes().includes("rw_organization_admin")) out.push(...(await adminPages(t, base, {})));
     return out;
   },
-  async refresh(refreshToken) {
-    const res = await http("https://www.linkedin.com/oauth/v2/accessToken", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: form({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: env("LINKEDIN_CLIENT_ID"), client_secret: env("LINKEDIN_CLIENT_SECRET") }),
-    });
-    if (res.status >= 400) throw linkedinError(res, "Refreshing the LinkedIn token");
-    return tokenSet(res.body as { access_token: string; expires_in: number; refresh_token?: string });
+  refresh: (refreshToken) => refreshWith(refreshToken, "LINKEDIN_CLIENT_ID", "LINKEDIN_CLIENT_SECRET"),
+};
+
+/** The company pages this token's member administers (up to 50). */
+async function adminPages(t: string, base: Omit<ConnectedAccount, "platform" | "externalId" | "handle" | "displayName" | "avatarUrl" | "meta">, extraMeta: Record<string, unknown>): Promise<ConnectedAccount[]> {
+  const acl = await http(`https://api.linkedin.com/rest/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED`, { headers: headers(t, false) });
+  if (acl.status >= 400) throw linkedinError(acl, "Listing the LinkedIn pages you administer");
+  const orgs = ((acl.body as { elements?: { organization: string }[] }).elements ?? []).map((e) => e.organization);
+  const out: ConnectedAccount[] = [];
+  for (const urn of orgs.slice(0, 50)) {
+    const id = urn.split(":").pop()!;
+    const org = await http(`https://api.linkedin.com/rest/organizations/${encodeURIComponent(id)}`, { headers: headers(t, false) });
+    if (org.status >= 400) continue;
+    const o = org.body as { localizedName?: string; vanityName?: string };
+    out.push({ ...base, platform: "linkedin", externalId: `organization:${id}`, handle: o.vanityName ?? o.localizedName ?? id, displayName: o.localizedName ?? "LinkedIn page", avatarUrl: null, meta: { author: urn, kind: "organization", ...extraMeta } });
+  }
+  return out;
+}
+
+async function exchangeWith(code: string, redirectUri: string, idVar: string, secretVar: string): Promise<TokenSet> {
+  const res = await http("https://www.linkedin.com/oauth/v2/accessToken", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: form({ grant_type: "authorization_code", code, redirect_uri: redirectUri, client_id: env(idVar), client_secret: env(secretVar) }),
+  });
+  if (res.status >= 400) throw linkedinError(res, "Signing in with LinkedIn");
+  return tokenSet(res.body as { access_token: string; expires_in: number; refresh_token?: string });
+}
+
+async function refreshWith(refreshToken: string, idVar: string, secretVar: string): Promise<TokenSet> {
+  const res = await http("https://www.linkedin.com/oauth/v2/accessToken", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: form({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: env(idVar), client_secret: env(secretVar) }),
+  });
+  if (res.status >= 400) throw linkedinError(res, "Refreshing the LinkedIn token");
+  return tokenSet(res.body as { access_token: string; expires_in: number; refresh_token?: string });
+}
+
+/** Company pages through the second LinkedIn app (Community Management API only). Channels it adds carry meta.app = "pages". */
+export const linkedinPagesProvider: ProviderAdapter = {
+  id: "linkedin_pages",
+  name: "LinkedIn company page",
+  platforms: ["linkedin"],
+  envVars: ["LINKEDIN_PAGES_CLIENT_ID", "LINKEDIN_PAGES_CLIENT_SECRET"],
+  configured: () => Boolean(env("LINKEDIN_PAGES_CLIENT_ID") && env("LINKEDIN_PAGES_CLIENT_SECRET")),
+  authorizeUrl(state, redirectUri) {
+    const q = form({ response_type: "code", client_id: env("LINKEDIN_PAGES_CLIENT_ID"), redirect_uri: redirectUri, state, scope: pagesScopes() });
+    return `https://www.linkedin.com/oauth/v2/authorization?${q}`;
   },
+  async exchangeCode(code, redirectUri) {
+    const tokens = await exchangeWith(code, redirectUri, "LINKEDIN_PAGES_CLIENT_ID", "LINKEDIN_PAGES_CLIENT_SECRET");
+    const base = { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, expiresAt: tokens.expiresAt?.toISOString() ?? null, followers: null };
+    const pages = await adminPages(tokens.accessToken, base, { app: "pages" });
+    if (!pages.length) throw new PublishError("LinkedIn didn't return any company page you administer. Sign in with a page admin account.", "permanent");
+    return pages;
+  },
+  refresh: (refreshToken) => refreshWith(refreshToken, "LINKEDIN_PAGES_CLIENT_ID", "LINKEDIN_PAGES_CLIENT_SECRET"),
 };
 
 async function download(url: string): Promise<Buffer> {
