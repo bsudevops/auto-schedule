@@ -622,3 +622,42 @@ table.tbl{width:100%;border-collapse:collapse}
 .ai-media-head b{font-size:13.5px}
 .ai-media-head small{font-size:12.5px}
 .label-plain{font-size:12.5px;font-weight:600;color:var(--ink-2)}
+
+/* Loading: a floating logo with post cards drifting around it, and a progress bar along the top on every navigation. */
+.nav-progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:1000;pointer-events:none;opacity:0;
+  background:linear-gradient(90deg,#5AAEFF,var(--sky),var(--violet));box-shadow:0 0 10px rgba(43,134,245,.55)}
+.nav-progress.loading{opacity:1;animation:np-grow 8s cubic-bezier(.08,.6,.2,1) forwards}
+.nav-progress.done{opacity:0;width:100%;transition:width .2s ease-out,opacity .3s ease .2s}
+@keyframes np-grow{0%{width:0}15%{width:35%}50%{width:70%}100%{width:92%}}
+
+.floating-loader{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;min-height:min(60vh,520px);
+  opacity:0;animation:fl-in .35s ease .18s forwards}
+.floating-loader.full{min-height:100vh}
+.fl-stage{position:relative;width:220px;height:170px}
+.fl-glow{position:absolute;left:50%;top:44%;width:150px;height:150px;margin:-75px 0 0 -75px;border-radius:50%;
+  background:radial-gradient(circle,rgba(43,134,245,.22),rgba(108,91,216,.08) 55%,transparent 70%);animation:fl-pulse 3.2s ease-in-out infinite}
+.fl-logo{position:absolute;left:50%;top:44%;margin:-28px 0 0 -28px;border-radius:16px;box-shadow:0 12px 30px rgba(20,95,204,.32);animation:fl-float 3.2s ease-in-out infinite}
+.fl-shadow{position:absolute;left:50%;bottom:6px;width:54px;height:10px;margin-left:-27px;border-radius:50%;background:rgba(14,34,64,.14);filter:blur(3px);animation:fl-shadow 3.2s ease-in-out infinite}
+.fl-card{position:absolute;display:grid;grid-template-columns:14px 1fr;grid-template-rows:auto auto;column-gap:7px;row-gap:5px;align-items:center;
+  width:84px;padding:8px 9px;border-radius:10px;background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow-lift)}
+.fl-card i{grid-row:span 2;width:14px;height:14px;border-radius:50%}
+.fl-card b{display:block;height:5px;border-radius:3px;background:var(--sky-100)}
+.fl-card b.short{width:60%;background:var(--line-2)}
+.fl-card.c1{left:0;top:18px;animation:fl-drift-a 4.2s ease-in-out infinite}
+.fl-card.c2{right:0;top:4px;animation:fl-drift-b 4.8s ease-in-out .4s infinite}
+.fl-card.c3{right:10px;bottom:22px;animation:fl-drift-a 5.2s ease-in-out .9s infinite reverse}
+.fl-label{font-family:var(--f-display);font-weight:500;color:var(--muted);letter-spacing:.01em;
+  background:linear-gradient(90deg,var(--muted) 0%,var(--muted) 40%,var(--sky) 50%,var(--muted) 60%,var(--muted) 100%);background-size:250% 100%;
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:fl-shine 2.2s linear infinite}
+@keyframes fl-in{to{opacity:1}}
+@keyframes fl-float{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-14px) rotate(2deg)}}
+@keyframes fl-shadow{0%,100%{transform:scaleX(1);opacity:1}50%{transform:scaleX(.7);opacity:.55}}
+@keyframes fl-pulse{0%,100%{transform:scale(.92);opacity:.8}50%{transform:scale(1.08);opacity:1}}
+@keyframes fl-drift-a{0%,100%{transform:translate(0,0) rotate(-6deg)}50%{transform:translate(6px,-12px) rotate(-1deg)}}
+@keyframes fl-drift-b{0%,100%{transform:translate(0,0) rotate(5deg)}50%{transform:translate(-8px,10px) rotate(1deg)}}
+@keyframes fl-shine{from{background-position:100% 0}to{background-position:-150% 0}}
+@media (prefers-reduced-motion:reduce){
+  .fl-logo,.fl-shadow,.fl-glow,.fl-card,.fl-label{animation:none}
+  .fl-label{-webkit-text-fill-color:var(--muted)}
+  .nav-progress.loading{animation-duration:0s;width:70%}
+}
