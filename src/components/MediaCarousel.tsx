@@ -48,7 +48,8 @@ export function MediaCarousel({ slides, thumbs = false, fit = "contain", classNa
     <div className={`mc ${fit === "natural" ? "mc-natural" : "mc-contain"} ${className}`.trim()} role={many ? "region" : undefined} aria-roledescription={many ? "carousel" : undefined} aria-label={many ? "Media" : undefined}>
       <div
         className="mc-frame"
-        style={fit === "natural" && ratio ? { aspectRatio: String(ratio) } : undefined}
+        // The frame is exactly the item's shape (no empty bands); a very tall item is narrowed so it stays under 560px high.
+        style={fit === "natural" && ratio ? { aspectRatio: String(ratio), maxWidth: `${Math.round(560 * ratio)}px`, marginInline: "auto" } : undefined}
         tabIndex={many ? 0 : undefined}
         onKeyDown={(e) => { if (!many) return; if (e.key === "ArrowLeft") { e.preventDefault(); go(-1); } if (e.key === "ArrowRight") { e.preventDefault(); go(1); } }}
         onTouchStart={(e) => { touch.current = e.touches[0]?.clientX ?? null; }}
