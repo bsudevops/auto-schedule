@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import "@fontsource-variable/outfit";
 import "@fontsource-variable/figtree";
 import "@fontsource/jetbrains-mono/500.css";
+import { Suspense } from "react";
+import { NavProgress } from "@/components/loading/NavProgress";
 import { BRAND } from "@/lib/brand";
 import "./globals.css";
 
@@ -14,7 +16,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Suspense fallback={null}>
+          <NavProgress />
+        </Suspense>
+        {children}
+      </body>
     </html>
   );
 }
