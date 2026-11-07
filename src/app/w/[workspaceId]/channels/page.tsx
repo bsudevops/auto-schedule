@@ -6,7 +6,7 @@ import { Icon } from "@/components/Icon";
 import { EmptyState, PlatformBadge, StatusPill } from "@/components/ui";
 import { can } from "@/lib/permissions";
 import { PLATFORMS } from "@/lib/platforms";
-import { PROVIDERS, RATE_LIMITS, providerFor } from "@/lib/publishing";
+import { PROVIDERS, RATE_LIMITS, providerForChannel } from "@/lib/publishing";
 import { dryRun } from "@/lib/publishing/run";
 import { slotsUsed } from "@/lib/publishing/rate-limit";
 import { requireWorkspace } from "@/lib/session";
@@ -34,6 +34,8 @@ const HINTS: Record<string, string> = {
   bluesky: "Connects with an app password",
   devto: "Connects with an API key",
   mastodon: "Asks for your server, then you sign in there",
+  linkedin: "Your personal profile",
+  linkedin_pages: "Company pages you administer",
 };
 
 function relative(d: Date | null) {
@@ -83,8 +85,8 @@ export default async function Page({ params, searchParams }: { params: Promise<{
     fields: p.fields ?? p.contextFields ?? [],
     hint: HINTS[p.id],
   }));
-  const connectHref = (platform: (typeof rows)[number]["platform"]) => {
-    const p = providerFor(platform);
+  const connectHref = (c: (typeof rows)[number]) => {
+    const p = providerForChannel(c);
     return p ? `/api/w/${workspaceId}/channels/connect/${p.id}` : null;
   };
   const errorMsg = sp.error && sp.error !== "context" ? ERRORS[sp.error] ?? ERRORS.failed : null;
@@ -114,7 +116,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <div className="grid g-2">
           {active.map((c, i) => {
             const u = usage[i];
-            const href = connectHref(c.platform);
+            const href = connectHref(c);
             const posted = monthly.find((m) => m.channelId === c.id)?.n ?? 0;
             return (
               <div className="card card-b" key={c.id} data-channel={c.handle}>
@@ -166,7 +168,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
             {gone.map((c) => (
               <div className="row" key={c.id} style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
                 <div className="row"><PlatformBadge platform={c.platform} /> <span>{c.displayName}</span></div>
-                {manage && <ChannelButtons workspaceId={workspaceId} channelId={c.id} name={c.displayName} reconnectHref={connectHref(c.platform)} status={c.status} />}
+                {manage && <ChannelButtons workspaceId={workspaceId} channelId={c.id} name={c.displayName} reconnectHref={connectHref(c)} status={c.status} />}
               </div>
             ))}
           </div>

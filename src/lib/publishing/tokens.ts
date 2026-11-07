@@ -5,7 +5,7 @@ import { decryptSecret, encryptSecret } from "../crypto";
 import { PLATFORMS } from "../platforms";
 import { notify, workspaceManagers } from "../notify";
 import { emitEvent } from "../webhooks";
-import { providerFor } from "./index";
+import { providerForChannel } from "./index";
 import { PublishError } from "./types";
 
 type Channel = typeof channels.$inferSelect;
@@ -37,7 +37,7 @@ export async function flagChannel(c: Channel, status: "expiring" | "reconnect", 
 }
 
 async function refreshChannel(c: Channel): Promise<Channel> {
-  const provider = providerFor(c.platform);
+  const provider = providerForChannel(c);
   if (!provider?.refresh || !c.refreshTokenEnc) return c;
   const t = await provider.refresh(decryptSecret(c.refreshTokenEnc));
   const [updated] = await db
@@ -72,7 +72,7 @@ export async function refreshExpiringTokens(now = Date.now()) {
     if (c.status === "disconnected" || c.status === "reconnect" || !c.tokenExpiresAt) continue;
     const left = c.tokenExpiresAt.getTime() - now;
     try {
-      if (c.refreshTokenEnc && providerFor(c.platform)?.refresh && left < refreshLead(c)) {
+      if (c.refreshTokenEnc && providerForChannel(c)?.refresh && left < refreshLead(c)) {
         await refreshChannel(c);
         refreshed++;
       } else if (left <= 0) {

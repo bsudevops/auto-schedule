@@ -9,6 +9,7 @@ Every app needs the same redirect URL pattern:
 ```
 {APP_URL}/api/channels/callback/meta
 {APP_URL}/api/channels/callback/linkedin
+{APP_URL}/api/channels/callback/linkedin_pages
 {APP_URL}/api/channels/callback/tiktok
 {APP_URL}/api/channels/callback/threads
 {APP_URL}/api/channels/callback/youtube
@@ -38,8 +39,12 @@ While the app is in development mode, only people with a role on the app can con
 1. At linkedin.com/developers, create an app linked to your company page.
 2. Add the products **Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn**. Add the redirect URL above under *Auth*.
 3. Set `LINKEDIN_CLIENT_ID` and `LINKEDIN_CLIENT_SECRET`.
-4. To post to company pages, apply for the **Community Management API**. Once approved, set
-   `LINKEDIN_SCOPES="openid profile w_member_social w_organization_social r_organization_social rw_organization_admin"`.
+4. Company pages need the **Community Management API**, and LinkedIn only grants it to an app with no other products. So create a **second app** for pages:
+   - Link it to (and verify) your company page, then request only **Community Management API** under *Products*.
+   - Add the redirect URL `{APP_URL}/api/channels/callback/linkedin_pages` under *Auth*.
+   - Once approved, set `LINKEDIN_PAGES_CLIENT_ID` and `LINKEDIN_PAGES_CLIENT_SECRET`. The Channels page then shows **LinkedIn company page**, which lists the pages the signed-in person administers.
+   - If one app has both sign-in and Community Management (older apps), you can instead set
+     `LINKEDIN_SCOPES="openid profile w_member_social w_organization_social r_organization_social rw_organization_admin"` on the first app.
 
 LinkedIn tokens last 60 days. The Channels page warns a week ahead, and owners and managers get a notification, so someone can renew the connection.
 
