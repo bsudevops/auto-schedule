@@ -5,9 +5,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { signOut } from "@/app/actions/auth";
 import { Icon, type IconName } from "@/components/Icon";
+import { WorkspaceIcon } from "@/components/WorkspaceIcon";
 import { Avatar } from "@/components/ui";
 
-type Ws = { id: string; name: string; color: string; orgName: string };
+type Ws = { id: string; name: string; color: string; orgName: string; logoUrl?: string | null };
 
 const MAIN: Array<[string, IconName, string]> = [
   ["", "home", "Overview"],
@@ -76,7 +77,7 @@ export function Sidebar(props: { brand: string; tagline: string; current: Ws; wo
       </div>
       <div className="ws-switch">
         <button className="ws-btn" aria-haspopup="true" aria-expanded={wsOpen} onClick={() => setWsOpen((o) => !o)}>
-          <span className="ws-ico" style={{ background: current.color }}>{current.name[0]}</span>
+          <WorkspaceIcon name={current.name} color={current.color} logoUrl={current.logoUrl} />
           <span className="ws-meta"><b>{current.name}</b><span>{current.orgName}</span></span>
           <Icon name="chev" size={16} />
         </button>
@@ -85,7 +86,7 @@ export function Sidebar(props: { brand: string; tagline: string; current: Ws; wo
             <div className="label" style={{ padding: "6px 8px" }}>Your workspaces</div>
             {workspaces.map((w) => (
               <Link key={w.id} className="mi" href={`/w/${w.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-                <span className="ws-ico" style={{ background: w.color }}>{w.name[0]}</span>
+                <WorkspaceIcon name={w.name} color={w.color} logoUrl={w.logoUrl} />
                 <span style={{ flex: 1 }}><b style={{ fontSize: 13 }}>{w.name}</b><br /><span className="muted" style={{ fontSize: 11 }}>{w.orgName}</span></span>
                 {w.id === current.id && <Icon name="check" size={16} />}
               </Link>

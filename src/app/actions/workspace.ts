@@ -9,6 +9,7 @@ import { BRAND } from "@/lib/brand";
 import { sha256 } from "@/lib/crypto";
 import { logActivity } from "@/lib/activity";
 import { addWorkspaceToOrg } from "@/lib/org-workspaces";
+import { LogoError, removeWorkspaceLogoFile, storeWorkspaceLogo } from "@/lib/workspace-logo";
 import { appUrl, emailConfigured, sendEmail } from "@/lib/email";
 import { canManageMember, ROLE_LABELS, ROLE_RANK } from "@/lib/permissions";
 import { requireUser, requireWorkspace } from "@/lib/session";
@@ -58,6 +59,37 @@ export async function updateWorkspace(workspaceId: string, _: FormState, form: F
   await db.update(workspaces).set(parsed.data).where(eq(workspaces.id, workspaceId));
   revalidatePath(`/w/${workspaceId}`, "layout");
   return { ok: "Saved." };
+}
+
+/** Sets the brand logo shown beside the workspace name. The previous logo file is removed. */
+export async function setWorkspaceLogo(workspaceId: string, form: FormData): Promise<FormState> {
+  await requireWorkspace(workspaceId, "manage_workspace");
+  const file = form.get("logo");
+  if (!(file instanceof File) || !file.size) return { error: "Choose an image file." };
+  let key: string;
+  try {
+    key = await storeWorkspaceLogo(workspaceId, Buffer.from(await file.arrayBuffer()));
+  } catch (e) {
+    if (e instanceof LogoError) return { error: e.message };
+    console.error("Saving workspace logo failed", e);
+    return { error: "Couldn't save the logo. Try again." };
+  }
+  const [old] = await db.select({ key: workspaces.iconKey }).from(workspaces).where(eq(workspaces.id, workspaceId));
+  await db.update(workspaces).set({ iconKey: key }).where(eq(workspaces.id, workspaceId));
+  await removeWorkspaceLogoFile(old?.key);
+  revalidatePath(`/w/${workspaceId}`, "layout");
+  revalidatePath("/organization");
+  return { ok: "Logo updated." };
+}
+
+export async function removeWorkspaceLogo(workspaceId: string): Promise<FormState> {
+  await requireWorkspace(workspaceId, "manage_workspace");
+  const [old] = await db.select({ key: workspaces.iconKey }).from(workspaces).where(eq(workspaces.id, workspaceId));
+  await db.update(workspaces).set({ iconKey: null }).where(eq(workspaces.id, workspaceId));
+  await removeWorkspaceLogoFile(old?.key);
+  revalidatePath(`/w/${workspaceId}`, "layout");
+  revalidatePath("/organization");
+  return { ok: "Logo removed." };
 }
 
 export async function inviteMember(workspaceId: string, _: FormState, form: FormData): Promise<FormState> {

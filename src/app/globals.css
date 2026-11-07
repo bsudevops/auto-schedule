@@ -204,7 +204,6 @@ table.tbl{width:100%;border-collapse:collapse}
 .preview{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
 .preview-h{display:flex;align-items:center;gap:10px;padding:12px 14px}
 .preview-b{padding:0 14px 12px;font-size:14px;white-space:pre-wrap;word-wrap:break-word}
-.preview-img{aspect-ratio:1.6;max-width:100%;width:100%}
 .preview-f{display:flex;gap:18px;padding:10px 14px;border-top:1px solid var(--line-2);color:var(--muted);font-size:12.5px}
 .radio-card{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer}
 .radio-card:has(input:checked){border-color:var(--sky);background:var(--sky-50)}
@@ -540,10 +539,7 @@ table.tbl{width:100%;border-collapse:collapse}
 .pd-main h2,.pd-side h2{font-size:15px}
 .pd-main h3{font-size:13px;color:var(--ink-2)}
 .pd-media{overflow:hidden}
-.pd-media video,.pd-media>img{display:block;width:100%;max-height:520px;object-fit:contain;background:var(--ink)}
 .pd-nomedia{padding:40px 20px;text-align:center;color:var(--muted);background:var(--sky-50)}
-.pd-strip{display:flex;gap:8px;padding:12px;overflow-x:auto;border-top:1px solid var(--line-2)}
-.pd-strip img{width:72px;height:72px;object-fit:cover;border-radius:8px;flex:none;border:1px solid var(--line)}
 .pd-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;color:var(--ink)}
 .pd-facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px 20px;margin:0}
 .pd-facts>div{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -661,3 +657,34 @@ table.tbl{width:100%;border-collapse:collapse}
   .fl-label{-webkit-text-fill-color:var(--muted)}
   .nav-progress.loading{animation-duration:0s;width:70%}
 }
+
+/* Media carousel (post page and composer preview) */
+.mc-frame{position:relative;outline:none;background:var(--ink);overflow:hidden}
+.mc-frame:focus-visible{box-shadow:inset 0 0 0 3px var(--sky)}
+.mc-frame>img,.mc-frame>video{display:block;width:100%;object-fit:contain}
+.mc-contain .mc-frame>img,.mc-contain .mc-frame>video{height:min(520px,70vh)}
+.mc-natural .mc-frame>img,.mc-natural .mc-frame>video{height:100%;max-height:560px}
+.mc-arrow{position:absolute;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:50%;border:0;display:grid;place-items:center;cursor:pointer;background:rgba(255,255,255,.92);color:var(--ink);box-shadow:0 2px 10px rgba(0,0,0,.25);transition:transform 140ms ease,background-color 140ms ease;z-index:1}
+.mc-arrow:hover{background:#fff;transform:translateY(-50%) scale(1.06)}
+.mc-arrow:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
+.mc-arrow.prev{left:10px}.mc-arrow.next{right:10px}
+.mc-count{position:absolute;top:10px;right:10px;padding:3px 9px;border-radius:999px;background:rgba(15,23,42,.7);color:#fff;font-size:11.5px;font-weight:600}
+.mc-dots{position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:center;gap:5px;pointer-events:none}
+.mc-dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.5);transition:background-color 140ms ease,transform 140ms ease}
+.mc-dots span.on{background:#fff;transform:scale(1.2)}
+.mc-strip{display:flex;gap:8px;padding:12px;overflow-x:auto;border-top:1px solid var(--line-2)}
+.mc-strip button{padding:0;border:2px solid transparent;border-radius:10px;background:none;cursor:pointer;flex:none;opacity:.7;transition:opacity 140ms ease,border-color 140ms ease}
+.mc-strip button:hover{opacity:1}
+.mc-strip button.on{border-color:var(--sky);opacity:1}
+.mc-strip img,.mc-strip video{display:block;width:68px;height:68px;object-fit:cover;border-radius:8px}
+.preview-media .mc-frame{background:var(--sky-50)}
+.preview-media + .preview-b{padding-top:12px}
+@media (prefers-reduced-motion:reduce){.mc-arrow,.mc-dots span,.mc-strip button{transition:none}}
+/* Overview keeps Team activity short: five entries, two lines each. "See all" has the rest. */
+.ov-activity .activity li{padding:8px 0}
+.ov-activity .activity .what{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+/* Workspace brand logo */
+.has-logo{background:#fff;box-shadow:inset 0 0 0 1px var(--line);overflow:hidden;padding:0}
+.has-logo img{width:100%;height:100%;object-fit:contain;display:block}
+.logo-field{display:flex;align-items:center;gap:14px}
+.ws-logo-lg{width:64px;height:64px;border-radius:16px;display:grid;place-items:center;flex:none;color:#fff;font-family:var(--f-display);font-weight:600;font-size:26px}

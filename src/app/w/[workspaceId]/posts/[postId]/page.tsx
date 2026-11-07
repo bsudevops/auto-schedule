@@ -10,6 +10,7 @@ import { PlatformBadge, StatusPill } from "@/components/ui";
 import { recentActivity } from "@/lib/activity";
 import { publicUrl } from "@/lib/media/storage";
 import { thumbKey } from "@/lib/media/service";
+import { MediaCarousel } from "@/components/MediaCarousel";
 import { can } from "@/lib/permissions";
 import { PLATFORMS } from "@/lib/platforms";
 import { requireWorkspace } from "@/lib/session";
@@ -114,19 +115,19 @@ export default async function Page({ params }: { params: Promise<{ workspaceId: 
       <div className="pd-grid">
         <div className="pd-main">
           <section className="card pd-media" aria-label="Media">
-            {cover ? (cover.kind === "video"
-              ? <video src={publicUrl(cover.storageKey)} controls preload="metadata" poster={thumb ? publicUrl(thumb.storageKey) : undefined} />
-              // eslint-disable-next-line @next/next/no-img-element
-              : <img src={publicUrl(cover.storageKey)} alt={cover.altText || ""} />)
-              : <div className="pd-nomedia">No media. This post is text only.</div>}
-            {media.length > 1 && (
-              <div className="pd-strip">
-                {media.slice(1).map(({ asset: a }) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={a.id} src={publicUrl(thumbKey(a.storageKey, a.kind))} alt={a.altText || a.filename} />
-                ))}
-              </div>
-            )}
+            {cover ? (
+              <MediaCarousel
+                thumbs
+                slides={media.map(({ asset: a }, k) => ({
+                  id: a.id,
+                  kind: a.kind === "video" ? "video" : "image",
+                  src: publicUrl(a.storageKey),
+                  thumb: a.kind === "image" ? publicUrl(thumbKey(a.storageKey, a.kind)) : undefined,
+                  alt: a.altText || "",
+                  poster: k === 0 && thumb ? publicUrl(thumb.storageKey) : undefined,
+                }))}
+              />
+            ) : <div className="pd-nomedia">No media. This post is text only.</div>}
           </section>
 
           <section className="card card-b stack" aria-labelledby="pd-caption">

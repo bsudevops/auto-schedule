@@ -1,4 +1,5 @@
 import "server-only";
+import { workspaceLogoUrl } from "@/lib/workspace-logo";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
@@ -26,12 +27,13 @@ export async function requireUser(): Promise<SessionUser> {
 
 export const listUserWorkspaces = cache(async (userId: string) =>
   db
-    .select({ id: workspaces.id, name: workspaces.name, color: workspaces.color, orgName: organizations.name, role: workspaceMembers.role })
+    .select({ id: workspaces.id, name: workspaces.name, color: workspaces.color, iconKey: workspaces.iconKey, orgName: organizations.name, role: workspaceMembers.role })
     .from(workspaceMembers)
     .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
     .innerJoin(organizations, eq(organizations.id, workspaces.orgId))
     .where(and(eq(workspaceMembers.userId, userId), isNull(workspaces.archivedAt)))
-    .orderBy(asc(workspaces.name)),
+    .orderBy(asc(workspaces.name))
+    .then((rows) => rows.map(({ iconKey, ...w }) => ({ ...w, logoUrl: workspaceLogoUrl(iconKey) }))),
 );
 
 /** Organizations the person belongs to, with their role in each. */

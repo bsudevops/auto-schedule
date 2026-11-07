@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { deletePostAction, savePostAction } from "@/app/actions/posts";
 import { Icon } from "@/components/Icon";
+import { MediaCarousel } from "@/components/MediaCarousel";
 import { PlatformBadge, StatusPill } from "@/components/ui";
 import type { Platform } from "@/db/schema";
 import { PLATFORMS } from "@/lib/platforms";
@@ -14,6 +15,8 @@ import type { DriveConfig } from "@/lib/drive";
 import { AiPanel, HashtagMenu, StockSearch, type HashtagSet } from "./ComposerTools";
 import { DrivePicker } from "./DrivePicker";
 import { YoutubeSettings, ytOptions } from "./YoutubeSettings";
+
+const MEDIA_FIRST = new Set<Platform>(["instagram", "tiktok"]);
 
 type Mode = "draft" | "now" | "schedule" | "queue";
 type Channel = { id: string; platform: Platform; handle: string; displayName: string; status: string };
@@ -236,11 +239,14 @@ export function Composer(props: ComposerProps) {
                   {previewCh ? (
                     <div className="preview">
                       <div className="preview-h"><PlatformBadge platform={previewCh.platform} large /><div><b style={{ fontSize: 13.5 }}>{previewCh.handle}</b><div className="muted" style={{ fontSize: 11.5 }}>{PLATFORMS[previewCh.platform].name}</div></div></div>
-                      <div className="preview-b">{previewText || <span className="muted">Your caption appears here.</span>}</div>
-                      {chosenMedia[0] && (chosenMedia[0].kind === "image"
-                        // eslint-disable-next-line @next/next/no-img-element
-                        ? <img className="preview-img" src={chosenMedia[0].url} alt="" style={{ objectFit: "cover" }} />
-                        : <video className="preview-img" src={chosenMedia[0].url} controls />)}
+                      {(() => {
+                        const text = <div className="preview-b">{previewText || <span className="muted">Your caption appears here.</span>}</div>;
+                        const mediaEl = chosenMedia.length > 0 && (
+                          <MediaCarousel fit="natural" className="preview-media" slides={chosenMedia.map((m) => ({ id: m.id, kind: m.kind, src: m.url, thumb: m.kind === "image" ? m.thumb : undefined, alt: m.filename }))} />
+                        );
+                        // Instagram and TikTok put the media first and the caption under it; the others show the text first.
+                        return MEDIA_FIRST.has(previewCh.platform) ? <>{mediaEl}{text}</> : <>{text}{mediaEl}</>;
+                      })()}
                       <div className="preview-f"><span className="row" style={{ gap: 5 }}><Icon name="heart" size={15} /> Like</span><span className="row" style={{ gap: 5 }}><Icon name="msg" size={15} /> Comment</span><span className="row" style={{ gap: 5 }}><Icon name="share" size={15} /> Share</span></div>
                     </div>
                   ) : <div className="empty">Pick at least one channel to see a preview.</div>}

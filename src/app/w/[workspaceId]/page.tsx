@@ -42,7 +42,7 @@ export default async function Overview({ params }: { params: Promise<{ workspace
     db.select().from(channels).where(and(eq(channels.workspaceId, workspaceId), inArray(channels.status, ["connected", "expiring", "reconnect"]))).orderBy(asc(channels.platform)),
     db.select({ n: count() }).from(posts).where(and(ws, eq(posts.status, "published"), gte(posts.publishedAt, ago30))),
     db.select({ n: count() }).from(inboxThreads).where(and(eq(inboxThreads.workspaceId, workspaceId), eq(inboxThreads.unread, true), isNull(inboxThreads.doneAt))),
-    recentActivity(workspaceId, { limit: 6 }),
+    recentActivity(workspaceId, { limit: 5 }),
     db.select({ channelId: postTargets.channelId, n: count() }).from(postTargets).innerJoin(channels, eq(channels.id, postTargets.channelId))
       .where(and(eq(channels.workspaceId, workspaceId), eq(postTargets.status, "published"), gte(postTargets.publishedAt, monthStart))).groupBy(postTargets.channelId),
   ]);
